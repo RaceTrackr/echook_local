@@ -1,46 +1,110 @@
 <!--
   @file components/tabs/SettingsTab.vue
-  @brief User settings and account management component.
-  @description Comprehensive settings panel for managing account details,
-               display preferences, unit conversions, and API access information.
+  @brief User settings and preferences component.
 -->
 <script setup>
-/**
- * @description Settings Tab component.
- * 
- * Features:
- * - Account profile editing with email verification
- * - Display/unit settings (speed, temperature units)
- * - Graph visibility and dashboard preferences
- * - API credentials display (ID, GET URL, WebSocket URL)
- * - Settings export/import functionality
- * - Public opt-out toggle for telemetry visibility
- * 
- * Account changes require OTP verification via email.
- */
-import { computed, ref } from 'vue'
+import { computed, ref, reactive, watchEffect } from 'vue'
 import { useTelemetryStore } from '../../stores/telemetry'
-import { useAuthStore } from '../../stores/auth'
 import { useSettingsStore } from '../../stores/settings'
-import { Switch, SwitchGroup, SwitchLabel, Menu, MenuButton, MenuItems, MenuItem, Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue'
+import ThemePicker from '../ui/ThemePicker.vue'
+import draggable from 'vuedraggable'
+import { Switch, SwitchGroup, SwitchLabel, Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/vue'
 import {
-  ClipboardDocumentCheckIcon,
-  ClipboardDocumentIcon,
   EllipsisVerticalIcon,
   ArrowDownTrayIcon,
   ArrowUpTrayIcon,
   InformationCircleIcon,
-  ArrowPathIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  ShieldCheckIcon,
+  ChevronDownIcon,
 } from '@heroicons/vue/24/outline'
 
 const telemetry = useTelemetryStore()
-const auth = useAuthStore()
-const settings = useSettingsStore()
+const settings  = useSettingsStore()
 
-/** @brief File input ref for settings import */
+// ── Collapsible sections ──────────────────────────────────────────────────────
+
+const openSections = reactive({
+  admin:       false,
+  theme:       false,
+  ribbon:      false,
+  keybindings: false,
+  units:       false,
+  performance: false,
+})
+
+const toggleSection = (key) => { openSections[key] = !openSections[key] }
+
+// ── Data Ribbon ───────────────────────────────────────────────────────────────
+
+const toggleRibbonKey = (key) => {
+  if (settings.ribbonHiddenKeys.includes(key)) {
+    settings.ribbonHiddenKeys = settings.ribbonHiddenKeys.filter(k => k !== key)
+  } else {
+    settings.ribbonHiddenKeys = [...settings.ribbonHiddenKeys, key]
+  }
+}
+
+const isRibbonKeyVisible = (key) => !settings.ribbonHiddenKeys.includes(key)
+
+const orderedAvailableKeys = computed({
+  get: () => {
+    const available = new Set(telemetry.availableKeys)
+    const userOrder = settings.dataCardOrder.filter(k => available.has(k))
+    const newKeys = telemetry.availableKeys.filter(k => !settings.dataCardOrder.includes(k))
+    return [...userOrder, ...newKeys]
+  },
+  set: (newOrder) => { settings.dataCardOrder = newOrder }
+})
+
+// ── Alarm thresholds ──────────────────────────────────────────────────────────
+
+const alarmDraft = reactive({})
+
+watchEffect(() => {
+  telemetry.availableKeys.forEach(key => {
+    if (!(key in alarmDraft)) {
+      const stored = settings.alarmThresholds[key]
+      alarmDraft[key] = {
+        alertLower: stored?.alert?.lower ?? '',
+        alertUpper: stored?.alert?.upper ?? '',
+        alarmLower: stored?.alarm?.lower ?? '',
+        alarmUpper: stored?.alarm?.upper ?? '',
+      }
+    }
+  })
+})
+
+const commitAlarm = (key) => {
+  const d = alarmDraft[key]
+  const parse = (v) => (v === '' || v === null || v === undefined) ? null : Number(v)
+  const alert = { lower: parse(d.alertLower), upper: parse(d.alertUpper) }
+  const alarm = { lower: parse(d.alarmLower), upper: parse(d.alarmUpper) }
+  const hasAny = Object.values(alert).some(v => v !== null) || Object.values(alarm).some(v => v !== null)
+  if (!hasAny) {
+    const updated = { ...settings.alarmThresholds }
+    delete updated[key]
+    settings.alarmThresholds = updated
+  } else {
+    settings.alarmThresholds = { ...settings.alarmThresholds, [key]: { alert, alarm } }
+  }
+}
+
+const clearAlarm = (key) => {
+  alarmDraft[key] = { alertLower: '', alertUpper: '', alarmLower: '', alarmUpper: '' }
+  const updated = { ...settings.alarmThresholds }
+  delete updated[key]
+  settings.alarmThresholds = updated
+}
+
+const hasAlarm = (key) => {
+  const t = settings.alarmThresholds[key]
+  if (!t) return false
+  return [t.alert?.lower, t.alert?.upper, t.alarm?.lower, t.alarm?.upper].some(v => v !== null && v !== undefined)
+}
+
+// ── Settings import / export ──────────────────────────────────────────────────
+
 const fileInput = ref(null)
 
 const downloadSettings = () => {
@@ -48,147 +112,112 @@ const downloadSettings = () => {
   const blob = new Blob([data], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
-  const date = new Date().toISOString().split('T')[0]
   link.href = url
-  link.download = `${date}.echook_settings`
+  link.download = `${new Date().toISOString().split('T')[0]}.echook_settings`
   link.click()
   URL.revokeObjectURL(url)
 }
 
-const triggerFileLoad = () => {
-  fileInput.value.click()
-}
+const triggerFileLoad = () => { fileInput.value.click() }
 
 const handleFileLoad = (event) => {
   const file = event.target.files[0]
   if (!file) return
   const reader = new FileReader()
   reader.onload = (e) => {
-    try {
-      const json = JSON.parse(e.target.result)
-      settings.importSettings(json)
-    } catch (err) {
-      console.error('Failed to load settings file', err)
-    }
+    try { settings.importSettings(JSON.parse(e.target.result)) }
+    catch (err) { console.error('Failed to load settings file', err) }
   }
   reader.readAsText(file)
 }
 
-// Account
-// Account Form
-const isSaving = ref(false)
-const form = ref({
-  car: '',
-  number: '',
-  team: '',
-  email: '',
-  publicOptOut: false
-})
+// ── Admin mode ────────────────────────────────────────────────────────────────
 
-// Initialize form from auth store
-import { watchEffect } from 'vue'
-watchEffect(() => {
-  if (auth.user) {
-    form.value.car = auth.user.car || ''
-    form.value.number = auth.user.number || ''
-    form.value.team = auth.user.team || ''
-    form.value.email = auth.user.email || ''
-    form.value.publicOptOut = auth.user.publicOptOut || false
-  }
-})
+const showAdminPrompt    = ref(false)
+const adminPasswordInput = ref('')
+const adminPasswordError = ref('')
+const newAdminPassword   = ref('')
+const passwordChangeMsg  = ref(null)
 
-const saveProfile = async () => {
-  isSaving.value = true
-  const res = await auth.requestVerificationCode()
-  isSaving.value = false
-
-  if (res.success) {
-    isVerificationModalOpen.value = true
-    verificationError.value = ''
-    verificationCode.value = ''
+const submitAdminPassword = () => {
+  if (adminPasswordInput.value === settings.adminPassword) {
+    settings.isAdminMode     = true
+    showAdminPrompt.value    = false
+    adminPasswordInput.value = ''
+    adminPasswordError.value = ''
   } else {
-    showMessage('Request Failed', 'Failed to request code: ' + res.error, 'error')
+    adminPasswordError.value = 'Incorrect password.'
   }
 }
 
-// Verification Modal
-const isVerificationModalOpen = ref(false)
-const verificationCode = ref('')
-const verificationError = ref('')
-const isVerifying = ref(false)
-
-const submitVerification = async () => {
-  if (!verificationCode.value || verificationCode.value.length < 6) {
-    verificationError.value = 'Please enter a valid 6-digit code.'
-    return
-  }
-
-  isVerifying.value = true
-  const updateData = { ...form.value, code: verificationCode.value }
-
-  const res = await auth.updateProfile(updateData)
-  isVerifying.value = false
-
-  if (res.success) {
-    isVerificationModalOpen.value = false
-    showMessage('Success', 'Profile updated successfully!', 'success')
-  } else {
-    verificationError.value = res.error
-  }
+const changeAdminPassword = () => {
+  if (!newAdminPassword.value.trim()) return
+  settings.adminPassword = newAdminPassword.value.trim()
+  newAdminPassword.value = ''
+  passwordChangeMsg.value = { ok: true, text: 'Password updated.' }
+  setTimeout(() => { passwordChangeMsg.value = null }, 3000)
 }
 
-// Message Modal
-const isMessageModalOpen = ref(false)
-const messageTitle = ref('')
-const messageBody = ref('')
-const messageType = ref('info') // success, error, info
+// ── Keybindings ───────────────────────────────────────────────────────────────
 
-const showMessage = (title, message, type = 'info') => {
-  messageTitle.value = title
-  messageBody.value = message
-  messageType.value = type
-  isMessageModalOpen.value = true
+const recordingKey = ref(null)
+
+const BINDING_LABELS = {
+  cycleTab:    { label: 'Cycle Tab',      desc: 'Cycle through Graph → Map → Laps' },
+  pauseResume: { label: 'Pause / Resume', desc: 'Pause or resume live data' },
+  zoomRace:    { label: 'Zoom to Race',   desc: 'Zoom chart to the full current race' },
+  unlockZoom:  { label: 'Unlock Zoom',    desc: 'Return to live scrolling' },
+  panLeft:     { label: 'Pan Left',       desc: 'Pan chart back 1 minute' },
+  panRight:    { label: 'Pan Right',      desc: 'Pan chart forward 1 minute' },
+  zoomIn:      { label: 'Zoom In',        desc: 'Zoom chart in 20%' },
+  zoomOut:     { label: 'Zoom Out',       desc: 'Zoom chart out 20%' },
+  focusMode:   { label: 'Focus Mode',     desc: 'Toggle focus mode (hide chrome)' },
 }
 
-// Copied states
-const copiedId = ref(false)
-const copiedGet = ref(false)
+const formatKey = (key) => {
+  if (!key) return '—'
+  const map = { ' ': 'Space', 'ArrowLeft': '← Left', 'ArrowRight': '→ Right',
+                'ArrowUp': '↑ Up', 'ArrowDown': '↓ Down', 'Tab': 'Tab',
+                'Escape': 'Esc', 'Enter': 'Enter', 'Backspace': 'Backspace' }
+  return map[key] || key.toUpperCase()
+}
 
-const handleCopy = async (text, type) => {
-  try {
-    await navigator.clipboard.writeText(text)
-    if (type === 'id') {
-      copiedId.value = true
-      setTimeout(() => copiedId.value = false, 2000)
-    } else if (type === 'get') {
-      copiedGet.value = true
-      setTimeout(() => copiedGet.value = false, 2000)
-    }
-  } catch (err) {
-    console.error('Failed to copy keys', err)
+const startRecording = (action) => { recordingKey.value = action }
+
+const onCaptureKey = (e) => {
+  if (!recordingKey.value) return
+  e.preventDefault()
+  e.stopPropagation()
+  if (e.key === 'Escape') { recordingKey.value = null; return }
+  settings.keyBindings = { ...settings.keyBindings, [recordingKey.value]: e.key }
+  recordingKey.value = null
+}
+
+const clearBinding = (action) => {
+  settings.keyBindings = { ...settings.keyBindings, [action]: null }
+}
+
+const resetBindings = () => {
+  settings.keyBindings = {
+    cycleTab: 'Tab', pauseResume: ' ', zoomRace: 'r', unlockZoom: 'l',
+    panLeft: 'ArrowLeft', panRight: 'ArrowRight', zoomIn: 'ArrowUp', zoomOut: 'ArrowDown',
+    focusMode: 'f',
   }
 }
-
-// URLs
-import { API_BASE_URL, WS_URL } from '../../config'
-const apiUrl = computed(() => `${API_BASE_URL}/api/get/${auth.user ? auth.user.id : ':id'}`)
-const wsUrl = WS_URL
-
 </script>
 
 <template>
   <div class="h-full overflow-y-auto bg-neutral-900 text-gray-300 p-6">
-    <div class="max-w-4xl mx-auto space-y-8">
+    <div class="max-w-4xl mx-auto space-y-4">
 
-      <!-- Header -->
-      <div class="flex items-center justify-between">
+      <!-- Page header + menu -->
+      <div class="flex items-center justify-between mb-4">
         <h2 class="text-2xl font-bold text-white">Settings</h2>
 
         <Menu as="div" class="relative">
           <MenuButton class="p-2 hover:bg-neutral-800 rounded-lg transition-colors text-gray-400 hover:text-white">
             <EllipsisVerticalIcon class="w-6 h-6" />
           </MenuButton>
-
           <Transition enter-active-class="transition duration-100 ease-out"
             enter-from-class="transform scale-95 opacity-0" enter-to-class="transform scale-100 opacity-100"
             leave-active-class="transition duration-75 ease-in" leave-from-class="transform scale-100 opacity-100"
@@ -197,155 +226,326 @@ const wsUrl = WS_URL
               class="absolute right-0 mt-2 w-56 origin-top-right divide-y divide-neutral-700 rounded-xl bg-neutral-800 shadow-2xl ring-1 ring-white/5 focus:outline-none z-50">
               <div class="px-1 py-1">
                 <MenuItem v-slot="{ active }">
-                <button @click="downloadSettings" :class="[
-                  active ? 'bg-primary text-white' : 'text-gray-300',
-                  'group flex w-full items-center rounded-lg px-3 py-2 text-sm'
-                ]">
-                  <ArrowDownTrayIcon class="mr-2 h-5 w-5" />
-                  Download Settings
-                </button>
+                  <button @click="downloadSettings" :class="[
+                    active ? 'bg-primary text-white' : 'text-gray-300',
+                    'group flex w-full items-center rounded-lg px-3 py-2 text-sm'
+                  ]">
+                    <ArrowDownTrayIcon class="mr-2 h-5 w-5" />
+                    Download Settings
+                  </button>
                 </MenuItem>
                 <MenuItem v-slot="{ active }">
-                <button @click="triggerFileLoad" :class="[
-                  active ? 'bg-primary text-white' : 'text-gray-300',
-                  'group flex w-full items-center rounded-lg px-3 py-2 text-sm'
-                ]">
-                  <ArrowUpTrayIcon class="mr-2 h-5 w-5" />
-                  Load Settings
-                </button>
+                  <button @click="triggerFileLoad" :class="[
+                    active ? 'bg-primary text-white' : 'text-gray-300',
+                    'group flex w-full items-center rounded-lg px-3 py-2 text-sm'
+                  ]">
+                    <ArrowUpTrayIcon class="mr-2 h-5 w-5" />
+                    Load Settings
+                  </button>
                 </MenuItem>
               </div>
             </MenuItems>
           </Transition>
         </Menu>
 
-        <!-- Hidden File Input -->
         <input type="file" ref="fileInput" class="hidden" accept=".echook_settings,application/json"
           @change="handleFileLoad" />
       </div>
 
-      <!-- Account Section -->
-      <section class="bg-neutral-800/50 rounded-lg p-6 border border-neutral-700">
-        <h3 class="text-lg font-semibold text-white mb-4 border-b border-neutral-700 pb-2">Account</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <!-- Car Name -->
-          <div>
-            <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Car Name</label>
-            <input v-model="form.car" type="text"
-              class="w-full bg-neutral-900 text-white px-3 py-2 rounded border border-neutral-700 focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-              placeholder="Enter car name..." />
-          </div>
-          <!-- Car Number -->
-          <div>
-            <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Car Number</label>
-            <input v-model="form.number" type="text"
-              class="w-full bg-neutral-900 text-white px-3 py-2 rounded border border-neutral-700 focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-              placeholder="Enter car number..." />
-          </div>
-          <!-- Team Name -->
-          <div>
-            <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Team Name</label>
-            <input v-model="form.team" type="text"
-              class="w-full bg-neutral-900 text-white px-3 py-2 rounded border border-neutral-700 focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-              placeholder="Enter team name..." />
-          </div>
-          <!-- Email -->
-          <div>
-            <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Email</label>
-            <input v-model="form.email" type="email"
-              class="w-full bg-neutral-900 text-white px-3 py-2 rounded border border-neutral-700 focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-              placeholder="Enter email address..." />
-          </div>
+      <!-- ── Admin ───────────────────────────────────────────────────────── -->
+      <section class="bg-neutral-800/50 rounded-lg border border-neutral-700 overflow-hidden">
+        <button @click="toggleSection('admin')"
+          class="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-neutral-700/30 transition">
+          <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+            <ShieldCheckIcon class="w-5 h-5 text-primary" />
+            Admin
+          </h3>
+          <ChevronDownIcon class="w-5 h-5 text-gray-400 transition-transform duration-200"
+            :class="openSections.admin ? 'rotate-180' : ''" />
+        </button>
 
-          <!-- Opt-Out Toggle -->
-          <div class="col-span-1 md:col-span-2">
-            <SwitchGroup>
-              <div class="flex items-center justify-between">
-                <div class="flex flex-col">
-                  <SwitchLabel class="text-sm font-medium text-gray-300">Spectator View Opt-Out</SwitchLabel>
-                  <span class="text-s text-gray-500 mt-1">
-                    {{ form.publicOptOut ? 'Opted Out :(' : 'Opted In :)' }}
-                  </span>
-                  <span class="text-xs text-gray-500 mt-1 max-w-lg">
-                    If there are three or more cars opted in on the same known track, their speed and location will be
-                    visible in the public spectator view. This is no more than would be visible to a spectator at the
-                    track. (We'd really appreciate it if you don't opt out!)
-                  </span>
-                </div>
-                <Switch v-model="form.publicOptOut"
-                  :class="form.publicOptOut ? 'bg-red-900 ring-1 ring-red-500' : 'bg-neutral-600'"
-                  class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
-                  <span :class="form.publicOptOut ? 'translate-x-6' : 'translate-x-1'"
-                    class="inline-block h-4 w-4 transform rounded-full bg-white transition" />
-                </Switch>
+        <div v-show="openSections.admin" class="px-6 pb-6 border-t border-neutral-700 pt-4">
+          <div v-if="settings.isAdminMode" class="space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-medium text-white">Admin mode</p>
+                <p class="text-xs text-gray-500 mt-0.5">Admin tab is visible in the sidebar.</p>
               </div>
-            </SwitchGroup>
-          </div>
-        </div>
+              <button @click="settings.isAdminMode = false"
+                class="relative w-11 h-6 rounded-full bg-primary transition-colors duration-200 flex-shrink-0 focus:outline-none">
+                <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 translate-x-5" />
+              </button>
+            </div>
 
-        <!-- Account Actions -->
-        <div class="mt-6 flex space-x-4 border-t border-neutral-700 pt-4">
-          <button @click="saveProfile" :disabled="isSaving"
-            class="px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded transition text-sm font-bold flex items-center">
-            <ArrowPathIcon v-if="isSaving" class="mr-2 h-4 w-4 animate-spin" />
-            {{ isSaving ? 'Saving...' : 'Save Changes' }}
-          </button>
-          <div class="flex-1"></div>
-          <button
-            class="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 text-white rounded transition text-sm font-medium">
-            Change Password
-          </button>
-          <button
-            class="px-4 py-2 bg-red-900/50 hover:bg-red-900 text-red-200 border border-red-900 rounded transition text-sm font-medium">
-            Delete Account
-          </button>
-        </div>
-      </section>
-
-      <!-- Storage Info -->
-      <div class="bg-primary/10 border border-primary/20 rounded-lg p-4 flex items-start space-x-3">
-        <InformationCircleIcon class="w-5 h-5 text-primary shrink-0 mt-0.5" />
-        <div class="text-xs text-gray-400 leading-relaxed">
-          <p class="font-bold text-gray-300 mb-1 uppercase tracking-wider">Browser Storage</p>
-          Unit, visual, and performance settings are saved automatically to your browser's local storage for this
-          device.
-          Use the menu at the top to download a backup file or load settings on a different machine.
-        </div>
-      </div>
-
-      <!-- Units -->
-      <section class="bg-neutral-800/50 rounded-lg p-6 border border-neutral-700">
-        <h3 class="text-lg font-semibold text-white mb-4 border-b border-neutral-700 pb-2">Units</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <!-- Speed -->
-          <div>
-            <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Speed Unit</label>
-            <select v-model="settings.unitSettings.speedUnit"
-              class="w-full bg-neutral-900 text-white px-3 py-2 rounded border border-neutral-700 focus:border-primary focus:ring-1 focus:ring-primary outline-none">
-              <option value="mph">Miles per Hour (mph)</option>
-              <option value="kph">Kilometers per Hour (km/h)</option>
-              <option value="ms">Meters per Second (m/s)</option>
-            </select>
+            <div class="pt-3 border-t border-neutral-700">
+              <p class="text-xs font-medium text-gray-400 mb-2">Change admin password</p>
+              <div class="flex gap-2">
+                <input v-model="newAdminPassword" type="password" placeholder="New password"
+                  class="flex-1 bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition" />
+                <button @click="changeAdminPassword" :disabled="!newAdminPassword.trim()"
+                  class="px-4 py-2 bg-primary hover:opacity-90 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition">
+                  Save
+                </button>
+              </div>
+              <p v-if="passwordChangeMsg" class="text-xs mt-1.5"
+                :class="passwordChangeMsg.ok ? 'text-green-400' : 'text-red-400'">
+                {{ passwordChangeMsg.text }}
+              </p>
+            </div>
           </div>
 
-          <!-- Temperature -->
-          <div>
-            <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Temperature Unit</label>
-            <select v-model="settings.unitSettings.tempUnit"
-              class="w-full bg-neutral-900 text-white px-3 py-2 rounded border border-neutral-700 focus:border-primary focus:ring-1 focus:ring-primary outline-none">
-              <option value="c">Celsius (°C)</option>
-              <option value="f">Fahrenheit (°F)</option>
-            </select>
+          <div v-else class="space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-medium text-white">Admin mode</p>
+                <p class="text-xs text-gray-500 mt-0.5">Enter the admin password to unlock.</p>
+              </div>
+              <button @click="showAdminPrompt = !showAdminPrompt"
+                class="relative w-11 h-6 rounded-full bg-neutral-700 transition-colors duration-200 flex-shrink-0 focus:outline-none">
+                <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 translate-x-0" />
+              </button>
+            </div>
+
+            <Transition enter-active-class="transition-all duration-200" enter-from-class="opacity-0 -translate-y-1"
+              enter-to-class="opacity-100 translate-y-0" leave-active-class="transition-all duration-150"
+              leave-from-class="opacity-100 translate-y-0" leave-to-class="opacity-0 -translate-y-1">
+              <div v-if="showAdminPrompt" class="flex gap-2">
+                <input v-model="adminPasswordInput" type="password" placeholder="Admin password"
+                  @keydown.enter="submitAdminPassword"
+                  class="flex-1 bg-neutral-900 border rounded-lg px-3 py-2 text-sm text-white focus:ring-1 outline-none transition"
+                  :class="adminPasswordError
+                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                    : 'border-neutral-700 focus:border-primary focus:ring-primary'" />
+                <button @click="submitAdminPassword" :disabled="!adminPasswordInput.trim()"
+                  class="px-4 py-2 bg-primary hover:opacity-90 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition">
+                  Unlock
+                </button>
+              </div>
+            </Transition>
+            <p v-if="adminPasswordError" class="text-xs text-red-400">{{ adminPasswordError }}</p>
           </div>
         </div>
       </section>
 
-      <!-- Performance -->
-      <section class="bg-neutral-800/50 rounded-lg p-6 border border-neutral-700">
-        <h3 class="text-lg font-semibold text-white mb-4 border-b border-neutral-700 pb-2">Performance and Visuals</h3>
+      <!-- ── Theme ───────────────────────────────────────────────────────── -->
+      <section class="bg-neutral-800/50 rounded-lg border border-neutral-700 overflow-hidden">
+        <button @click="toggleSection('theme')"
+          class="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-neutral-700/30 transition">
+          <h3 class="text-lg font-semibold text-white">Theme</h3>
+          <ChevronDownIcon class="w-5 h-5 text-gray-400 transition-transform duration-200"
+            :class="openSections.theme ? 'rotate-180' : ''" />
+        </button>
+        <div v-show="openSections.theme" class="px-6 pb-6 border-t border-neutral-700 pt-4">
+          <ThemePicker />
+        </div>
+      </section>
 
-        <div class="space-y-6">
-          <!-- Max History -->
+      <!-- ── Data Ribbon ─────────────────────────────────────────────────── -->
+      <section class="bg-neutral-800/50 rounded-lg border border-neutral-700 overflow-hidden">
+        <button @click="toggleSection('ribbon')"
+          class="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-neutral-700/30 transition">
+          <h3 class="text-lg font-semibold text-white">Data Ribbon</h3>
+          <div class="flex items-center gap-3">
+            <div class="flex rounded-lg bg-neutral-900 p-1 gap-1" @click.stop>
+              <button v-for="opt in [{ label: 'Scroll', value: 'scroll' }, { label: 'Wrap', value: 'wrap' }]"
+                :key="opt.value" @click="settings.ribbonOverflow = opt.value"
+                class="px-3 py-1 text-xs font-bold rounded-md transition-all duration-150"
+                :class="settings.ribbonOverflow === opt.value
+                  ? 'bg-primary text-white shadow'
+                  : 'text-gray-400 hover:text-white'">
+                {{ opt.label }}
+              </button>
+            </div>
+            <ChevronDownIcon class="w-5 h-5 text-gray-400 transition-transform duration-200"
+              :class="openSections.ribbon ? 'rotate-180' : ''" />
+          </div>
+        </button>
+
+        <div v-show="openSections.ribbon" class="px-6 pb-6 border-t border-neutral-700 pt-4">
+          <p class="text-xs text-gray-500 mb-4">
+            Toggle which metrics appear in the ribbon and set alarm thresholds.
+            Drag rows to reorder — the ribbon updates immediately.
+            Threshold values use your current display units (mph, °C etc.)
+          </p>
+
+          <div v-if="telemetry.availableKeys.length === 0"
+            class="text-center py-6 border-2 border-dashed border-neutral-700 rounded-lg text-gray-500 text-sm">
+            No telemetry data yet — cards will appear here once connected.
+          </div>
+
+          <draggable v-else v-model="orderedAvailableKeys" item-key="key" handle=".drag-handle"
+            :animation="150" class="space-y-2">
+            <template #item="{ element: key }">
+              <div class="rounded-lg border transition-colors duration-150"
+                :class="hasAlarm(key) ? 'border-red-500/30 bg-red-500/5' : 'border-neutral-700/60 bg-neutral-900/30'">
+                <div class="flex items-center justify-between px-3 py-2.5 gap-3">
+                  <div class="flex items-center gap-2.5 min-w-0">
+                    <div class="drag-handle cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 transition-colors flex-shrink-0 px-0.5"
+                      title="Drag to reorder">
+                      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <circle cx="9"  cy="5"  r="1.5"/><circle cx="15" cy="5"  r="1.5"/>
+                        <circle cx="9"  cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+                        <circle cx="9"  cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
+                      </svg>
+                    </div>
+                    <span class="w-2 h-2 rounded-full flex-shrink-0 transition-colors duration-200"
+                      :class="hasAlarm(key) ? 'bg-red-500 animate-pulse' : 'bg-neutral-600'"/>
+                    <div class="min-w-0">
+                      <p class="text-sm font-medium text-gray-200 truncate">{{ telemetry.getDisplayName(key) }}</p>
+                      <p class="text-xs text-gray-500">{{ key }}</p>
+                    </div>
+                  </div>
+                  <button type="button" @click="toggleRibbonKey(key)"
+                    :class="isRibbonKeyVisible(key) ? 'bg-primary' : 'bg-neutral-600'"
+                    class="relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
+                    <span :class="isRibbonKeyVisible(key) ? 'translate-x-6' : 'translate-x-1'"
+                      class="inline-block h-4 w-4 transform rounded-full bg-white transition" />
+                  </button>
+                </div>
+
+                <div class="px-3 pb-3 space-y-2">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-xs font-semibold text-orange-400 w-9 flex-shrink-0">Alert</span>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-xs text-gray-500">below</span>
+                      <input type="number" step="any" v-model="alarmDraft[key].alertLower" @change="commitAlarm(key)" placeholder="—"
+                        class="w-20 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-xs text-white font-mono focus:border-orange-400 focus:ring-1 focus:ring-orange-400 outline-none transition" />
+                    </div>
+                    <span class="text-neutral-600 text-xs">·</span>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-xs text-gray-500">above</span>
+                      <input type="number" step="any" v-model="alarmDraft[key].alertUpper" @change="commitAlarm(key)" placeholder="—"
+                        class="w-20 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-xs text-white font-mono focus:border-orange-400 focus:ring-1 focus:ring-orange-400 outline-none transition" />
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-xs font-semibold text-red-400 w-9 flex-shrink-0">Alarm</span>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-xs text-gray-500">below</span>
+                      <input type="number" step="any" v-model="alarmDraft[key].alarmLower" @change="commitAlarm(key)" placeholder="—"
+                        class="w-20 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-xs text-white font-mono focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition" />
+                    </div>
+                    <span class="text-neutral-600 text-xs">·</span>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-xs text-gray-500">above</span>
+                      <input type="number" step="any" v-model="alarmDraft[key].alarmUpper" @change="commitAlarm(key)" placeholder="—"
+                        class="w-20 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-xs text-white font-mono focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition" />
+                    </div>
+                    <button v-if="hasAlarm(key)" @click="clearAlarm(key)"
+                      class="ml-auto text-xs text-red-400/70 hover:text-red-400 transition-colors">
+                      Clear all
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </draggable>
+
+          <div v-if="settings.ribbonHiddenKeys.length > 0" class="mt-4 pt-4 border-t border-neutral-700 flex justify-end">
+            <button @click="settings.ribbonHiddenKeys = []"
+              class="text-xs text-gray-500 hover:text-white transition">
+              Show all cards
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Keyboard Shortcuts ──────────────────────────────────────────── -->
+      <section class="bg-neutral-800/50 rounded-lg border border-neutral-700 overflow-hidden">
+        <button @click="toggleSection('keybindings')"
+          class="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-neutral-700/30 transition">
+          <h3 class="text-lg font-semibold text-white">Keyboard Shortcuts</h3>
+          <div class="flex items-center gap-3">
+            <button @click.stop="resetBindings"
+              class="text-xs text-gray-500 hover:text-white transition px-2 py-1 rounded">
+              Reset to defaults
+            </button>
+            <ChevronDownIcon class="w-5 h-5 text-gray-400 transition-transform duration-200"
+              :class="openSections.keybindings ? 'rotate-180' : ''" />
+          </div>
+        </button>
+
+        <div v-show="openSections.keybindings" class="px-6 pb-6 border-t border-neutral-700 pt-4">
+          <p class="text-xs text-gray-500 mb-4">Click a key badge to remap it, then press any key. Press Escape to cancel.</p>
+          <div class="space-y-1" @keydown="onCaptureKey" tabindex="-1">
+            <div v-for="(meta, action) in BINDING_LABELS" :key="action"
+              class="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-neutral-700/30 transition">
+              <div class="min-w-0 mr-4">
+                <p class="text-sm font-medium text-white">{{ meta.label }}</p>
+                <p class="text-xs text-gray-500">{{ meta.desc }}</p>
+              </div>
+              <div class="flex items-center gap-2 flex-shrink-0">
+                <button @click="startRecording(action)"
+                  class="px-3 py-1 rounded-md text-xs font-mono font-bold border transition min-w-[4rem] text-center"
+                  :class="recordingKey === action
+                    ? 'border-primary bg-primary/10 text-primary animate-pulse'
+                    : settings.keyBindings[action]
+                      ? 'border-neutral-600 bg-neutral-900 text-gray-200 hover:border-primary'
+                      : 'border-neutral-700 bg-neutral-900/50 text-gray-600 hover:border-neutral-500'">
+                  {{ recordingKey === action ? 'Press key…' : formatKey(settings.keyBindings[action]) }}
+                </button>
+                <button v-if="settings.keyBindings[action]" @click="clearBinding(action)"
+                  class="text-gray-600 hover:text-red-400 transition p-1 rounded">
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+                <div v-else class="w-5" />
+              </div>
+            </div>
+          </div>
+          <div class="pt-4 border-t border-neutral-700 mt-4 flex justify-end">
+            <button @click="settings.showShortcutsModal = true"
+              class="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 text-white rounded transition text-sm font-medium flex items-center">
+              <InformationCircleIcon class="w-4 h-4 mr-2" />
+              View Keyboard Shortcuts
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Units ───────────────────────────────────────────────────────── -->
+      <section class="bg-neutral-800/50 rounded-lg border border-neutral-700 overflow-hidden">
+        <button @click="toggleSection('units')"
+          class="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-neutral-700/30 transition">
+          <h3 class="text-lg font-semibold text-white">Units</h3>
+          <ChevronDownIcon class="w-5 h-5 text-gray-400 transition-transform duration-200"
+            :class="openSections.units ? 'rotate-180' : ''" />
+        </button>
+
+        <div v-show="openSections.units" class="px-6 pb-6 border-t border-neutral-700 pt-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Speed Unit</label>
+              <select v-model="settings.unitSettings.speedUnit"
+                class="w-full bg-neutral-900 text-white px-3 py-2 rounded border border-neutral-700 focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+                <option value="mph">Miles per Hour (mph)</option>
+                <option value="kph">Kilometers per Hour (km/h)</option>
+                <option value="ms">Meters per Second (m/s)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Temperature Unit</label>
+              <select v-model="settings.unitSettings.tempUnit"
+                class="w-full bg-neutral-900 text-white px-3 py-2 rounded border border-neutral-700 focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+                <option value="c">Celsius (°C)</option>
+                <option value="f">Fahrenheit (°F)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Performance and Visuals ─────────────────────────────────────── -->
+      <section class="bg-neutral-800/50 rounded-lg border border-neutral-700 overflow-hidden">
+        <button @click="toggleSection('performance')"
+          class="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-neutral-700/30 transition">
+          <h3 class="text-lg font-semibold text-white">Performance and Visuals</h3>
+          <ChevronDownIcon class="w-5 h-5 text-gray-400 transition-transform duration-200"
+            :class="openSections.performance ? 'rotate-180' : ''" />
+        </button>
+
+        <div v-show="openSections.performance" class="px-6 pb-6 border-t border-neutral-700 pt-4 space-y-6">
           <div>
             <div class="flex justify-between mb-2">
               <label class="text-sm font-medium text-gray-300">Max History Points</label>
@@ -353,13 +553,9 @@ const wsUrl = WS_URL
             </div>
             <input type="range" v-model.number="settings.maxHistoryPoints" min="5000" max="50000" step="1000"
               class="w-full h-2 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-primary" />
-            <p class="text-xs text-gray-500 mt-1">Lower values improve performance on slower devices. (Default: 50,000)
-            </p>
+            <p class="text-xs text-gray-500 mt-1">Lower values improve performance on slower devices. (Default: 50,000)</p>
           </div>
 
-
-
-          <!-- Graph Height -->
           <div>
             <div class="flex justify-between mb-2">
               <label class="text-sm font-medium text-gray-300">Graph Height</label>
@@ -369,9 +565,27 @@ const wsUrl = WS_URL
               class="w-full h-2 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-primary" />
           </div>
 
-          <!-- Toggles -->
+          <div>
+            <div class="flex justify-between mb-2">
+              <label class="text-sm font-medium text-gray-300">Rolling Average</label>
+              <span class="text-sm font-mono text-primary">
+                {{ settings.graphSettings.rollingAverage === 0 ? 'Off' : settings.graphSettings.rollingAverage + ' pts' }}
+              </span>
+            </div>
+            <div class="flex gap-1.5">
+              <button v-for="opt in [{ label: 'Off', value: 0 }, { label: '5', value: 5 }, { label: '10', value: 10 }, { label: '25', value: 25 }, { label: '50', value: 50 }]"
+                :key="opt.value" @click="settings.graphSettings.rollingAverage = opt.value"
+                class="flex-1 py-1.5 rounded-lg text-xs font-bold transition border"
+                :class="settings.graphSettings.rollingAverage === opt.value
+                  ? 'bg-primary border-primary text-white'
+                  : 'border-neutral-700 text-gray-500 hover:text-white hover:border-neutral-500'">
+                {{ opt.label }}
+              </button>
+            </div>
+            <p class="text-xs text-gray-600 mt-1.5">Smooths lines by averaging over the last N data points.</p>
+          </div>
+
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
-            <!-- Animations -->
             <SwitchGroup>
               <div class="flex items-center">
                 <SwitchLabel class="mr-4 text-sm font-medium text-gray-300 w-32">Graph Animations</SwitchLabel>
@@ -384,7 +598,6 @@ const wsUrl = WS_URL
               </div>
             </SwitchGroup>
 
-            <!-- Lap Highlights -->
             <SwitchGroup>
               <div class="flex items-center">
                 <SwitchLabel class="mr-4 text-sm font-medium text-gray-300 w-32">Lap Highlights</SwitchLabel>
@@ -397,9 +610,6 @@ const wsUrl = WS_URL
               </div>
             </SwitchGroup>
 
-
-
-            <!-- Grid -->
             <SwitchGroup>
               <div class="flex items-center">
                 <SwitchLabel class="mr-4 text-sm font-medium text-gray-300 w-32">Show Grid</SwitchLabel>
@@ -412,186 +622,9 @@ const wsUrl = WS_URL
               </div>
             </SwitchGroup>
           </div>
-
-          <!-- Shortcuts Button -->
-          <div class="pt-4 border-t border-neutral-700 mt-4 flex justify-end">
-            <button @click="settings.showShortcutsModal = true"
-              class="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 text-white rounded transition text-sm font-medium flex items-center">
-              <InformationCircleIcon class="w-4 h-4 mr-2" />
-              View Keyboard Shortcuts
-            </button>
-          </div>
-        </div>
-      </section>
-
-
-
-      <!-- API Section -->
-      <section class="bg-neutral-800/50 rounded-lg p-6 border border-neutral-700">
-        <h3 class="text-lg font-semibold text-white mb-4 border-b border-neutral-700 pb-2">API Access</h3>
-
-        <div class="space-y-6">
-          <!-- Car ID -->
-          <div v-if="auth.user?.id">
-            <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Car ID</label>
-            <div class="flex space-x-2">
-              <input type="text" readonly :value="auth.user.id"
-                class="flex-1 bg-neutral-900 text-gray-400 font-mono text-sm px-3 py-2 rounded border border-neutral-700 focus:outline-none" />
-              <button @click="handleCopy(auth.user.id, 'id')"
-                class="px-3 py-2 bg-neutral-700 hover:bg-neutral-600 rounded text-white transition flex items-center">
-                <ClipboardDocumentCheckIcon v-if="copiedId" class="w-5 h-5 text-green-400" />
-                <ClipboardDocumentIcon v-else class="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-
-          <!-- GET API -->
-          <div>
-            <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Get Live Data (Polling)</label>
-            <p class="text-xs text-gray-400 mb-2">GET API to retrieve the latest live data packet.</p>
-            <div class="flex space-x-2">
-              <input type="text" readonly :value="apiUrl"
-                class="flex-1 bg-neutral-900 text-primary font-mono text-sm px-3 py-2 rounded border border-neutral-700 focus:outline-none" />
-              <button @click="handleCopy(apiUrl, 'get')"
-                class="px-3 py-2 bg-neutral-700 hover:bg-neutral-600 rounded text-white transition flex items-center">
-                <ClipboardDocumentCheckIcon v-if="copiedGet" class="w-5 h-5 text-green-400" />
-                <ClipboardDocumentIcon v-else class="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-
-          <!-- WebSocket Guide -->
-          <div>
-            <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Get Live Data (WebSockets)</label>
-            <p class="text-xs text-gray-400 mb-2">Example for Node.js using Socket.io.</p>
-            <div
-              class="bg-neutral-900 rounded border border-neutral-700 p-4 text-sm font-mono text-gray-300 overflow-x-auto space-y-4">
-              <div>
-                <span class="text-gray-500">// 1. Connect and Join Room</span><br />
-                <span class="text-purple-400">const</span> socket = <span class="text-blue-400">io</span>(<span
-                  class="text-green-400">'{{ wsUrl }}'</span>);<br />
-                socket.<span class="text-blue-400">emit</span>(<span class="text-green-400">'join'</span>, <span
-                  class="text-green-400">'{{ auth.user?.id || "YOUR_CAR_ID" }}'</span>);
-              </div>
-              <div>
-                <span class="text-gray-500">// 2. Listen for Data</span><br />
-                socket.<span class="text-blue-400">on</span>(<span class="text-green-400">'data'</span>, (packet) =>
-                {<br />
-                &nbsp;&nbsp;<span class="text-blue-400">console</span>.log(packet); <br />
-                });
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
     </div>
-
-    <!-- Verification Modal -->
-    <TransitionRoot appear :show="isVerificationModalOpen" as="template">
-      <Dialog as="div" @close="isVerificationModalOpen = false" class="relative z-50">
-        <TransitionChild as="template" enter="duration-300 ease-out" enter-from="opacity-0" enter-to="opacity-100"
-          leave="duration-200 ease-in" leave-from="opacity-100" leave-to="opacity-0">
-          <div class="fixed inset-0 bg-black/75" />
-        </TransitionChild>
-
-        <div class="fixed inset-0 overflow-y-auto">
-          <div class="flex min-h-full items-center justify-center p-4 text-center">
-            <TransitionChild as="template" enter="duration-300 ease-out" enter-from="opacity-0 scale-95"
-              enter-to="opacity-100 scale-100" leave="duration-200 ease-in" leave-from="opacity-100 scale-100"
-              leave-to="opacity-0 scale-95">
-              <DialogPanel
-                class="w-full max-w-md transform overflow-hidden rounded-2xl bg-neutral-800 p-6 text-left align-middle shadow-xl transition-all border border-neutral-700">
-                <DialogTitle as="h3" class="text-lg font-medium leading-6 text-white mb-2">
-                  Verify Account Update
-                </DialogTitle>
-                <div class="mt-2">
-                  <p class="text-sm text-gray-300 mb-4">
-                    A 6-digit verification code has been sent to your email address. Please enter it below to confirm
-                    your
-                    changes. This code is valid for 10 minutes.
-                  </p>
-
-                  <div class="space-y-4">
-                    <div>
-                      <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Verification Code</label>
-                      <input v-model="verificationCode" type="text" maxlength="6"
-                        class="w-full bg-neutral-900 text-white px-3 py-2 rounded border border-neutral-700 focus:border-primary focus:ring-1 focus:ring-primary outline-none tracking-widest text-center text-lg font-mono"
-                        placeholder="000000" />
-                    </div>
-                    <p v-if="verificationError" class="text-sm text-red-400 font-medium animate-pulse">
-                      {{ verificationError }}
-                    </p>
-                  </div>
-                </div>
-
-                <div class="mt-6 flex justify-end space-x-3">
-                  <button type="button" class="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white transition"
-                    @click="isVerificationModalOpen = false">
-                    Cancel
-                  </button>
-                  <button type="button"
-                    class="px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded transition text-sm font-bold flex items-center"
-                    @click="submitVerification" :disabled="isVerifying">
-                    <ArrowPathIcon v-if="isVerifying" class="mr-2 h-4 w-4 animate-spin" />
-                    {{ isVerifying ? 'Verifying...' : 'Submit' }}
-                  </button>
-                </div>
-              </DialogPanel>
-            </TransitionChild>
-          </div>
-        </div>
-      </Dialog>
-    </TransitionRoot>
-
-    <!-- Message Modal -->
-    <TransitionRoot appear :show="isMessageModalOpen" as="template">
-      <Dialog as="div" @close="isMessageModalOpen = false" class="relative z-50">
-        <TransitionChild as="template" enter="duration-300 ease-out" enter-from="opacity-0" enter-to="opacity-100"
-          leave="duration-200 ease-in" leave-from="opacity-100" leave-to="opacity-0">
-          <div class="fixed inset-0 bg-black/75" />
-        </TransitionChild>
-
-        <div class="fixed inset-0 overflow-y-auto">
-          <div class="flex min-h-full items-center justify-center p-4 text-center">
-            <TransitionChild as="template" enter="duration-300 ease-out" enter-from="opacity-0 scale-95"
-              enter-to="opacity-100 scale-100" leave="duration-200 ease-in" leave-from="opacity-100 scale-100"
-              leave-to="opacity-0 scale-95">
-              <DialogPanel
-                class="w-full max-w-sm transform overflow-hidden rounded-2xl bg-neutral-800 p-6 text-left align-middle shadow-xl transition-all border border-neutral-700">
-                <div class="flex items-center space-x-3 mb-4">
-                  <div v-if="messageType === 'success'" class="p-2 bg-green-500/20 rounded-full">
-                    <CheckCircleIcon class="w-6 h-6 text-green-500" />
-                  </div>
-                  <div v-else-if="messageType === 'error'" class="p-2 bg-red-500/20 rounded-full">
-                    <XCircleIcon class="w-6 h-6 text-red-500" />
-                  </div>
-                  <div v-else class="p-2 bg-primary/20 rounded-full">
-                    <InformationCircleIcon class="w-6 h-6 text-primary" />
-                  </div>
-                  <DialogTitle as="h3" class="text-lg font-medium leading-6 text-white">
-                    {{ messageTitle }}
-                  </DialogTitle>
-                </div>
-
-                <div class="mt-2">
-                  <p class="text-sm text-gray-300">
-                    {{ messageBody }}
-                  </p>
-                </div>
-
-                <div class="mt-6 flex justify-end">
-                  <button type="button"
-                    class="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 text-white rounded transition text-sm font-medium"
-                    @click="isMessageModalOpen = false">
-                    Close
-                  </button>
-                </div>
-              </DialogPanel>
-            </TransitionChild>
-          </div>
-        </div>
-      </Dialog>
-    </TransitionRoot>
   </div>
 </template>

@@ -9,9 +9,6 @@ export default {
             colors: {
                 primary: '#cb1557',
             },
-            fontFamily: {
-                oswald: ['Oswald', 'sans-serif'],
-            }
         },
     },
     plugins: [],

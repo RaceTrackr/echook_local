@@ -26,23 +26,39 @@ import { LMap, LTileLayer, LCircleMarker, LControl } from "@vue-leaflet/vue-leaf
 import { ChevronDownIcon, AdjustmentsHorizontalIcon } from '@heroicons/vue/24/outline'
 import GradientPath from '../../components/GradientPath.vue'
 
+const props = defineProps({
+  /** Override satellite mode from panel config (null = use internal toggle) */
+  initialSatellite:    { type: Boolean, default: null },
+  /** Override trail duration in seconds from panel config (null = use internal) */
+  initialTrailSeconds: { type: Number,  default: null },
+  /** Override selected metric from panel config (null = use internal) */
+  initialMetric:       { type: String,  default: null },
+})
+
 const telemetry = useTelemetryStore()
 
-// Map State
 const map = ref(null)
 
-/** @brief Whether map auto-fits to trail bounds */
 const isAutoFitEnabled = ref(true)
-
-// Controls State
-/** @brief Trail duration in seconds (default 5 minutes) */
-const trailTimeSeconds = ref(300)
-
-/** @brief Currently selected metric for trail coloring */
-const selectedMetric = ref('speed')
-
-/** @brief Whether settings panel is expanded */
+const trailTimeSeconds = ref(props.initialTrailSeconds ?? 300)
+const selectedMetric   = ref(props.initialMetric ?? 'speed')
 const isSettingsExpanded = ref(false)
+const isSatellite = ref(props.initialSatellite ?? false)
+
+// Re-apply when panel config is updated via the editor
+watch(() => props.initialSatellite,    (v) => { if (v !== null) isSatellite.value    = v })
+watch(() => props.initialTrailSeconds, (v) => { if (v !== null) trailTimeSeconds.value = v })
+watch(() => props.initialMetric,       (v) => { if (v !== null) selectedMetric.value  = v })
+
+const tileUrl = computed(() => isSatellite.value
+  ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+  : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+)
+
+const tileAttribution = computed(() => isSatellite.value
+  ? 'Tiles &copy; Esri &mdash; Source: Esri, USGS, NOAA'
+  : '&copy; OpenStreetMap contributors'
+)
 
 /**
  * @brief Compute trail data within the selected time window.
@@ -127,8 +143,7 @@ const trailRange = computed(() => {
 <template>
   <div class="h-full w-full relative">
     <l-map ref="map" :use-global-leaflet="false">
-      <l-tile-layer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" layer-type="base"
-        name="OpenStreetMap"></l-tile-layer>
+      <l-tile-layer :url="tileUrl" :attribution="tileAttribution" layer-type="base" name="Map" />
 
       <!-- Gradient Trail -->
       <GradientPath :points="trailData" :min="trailRange.min" :max="trailRange.max" />
@@ -169,6 +184,17 @@ const trailRange = computed(() => {
                   :class="isAutoFitEnabled ? 'bg-primary' : 'bg-neutral-700'">
                   <div class="absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform duration-300"
                     :style="{ transform: isAutoFitEnabled ? 'translateX(20px)' : 'translateX(0)' }"></div>
+                </div>
+              </div>
+
+              <!-- Satellite Toggle -->
+              <div class="mb-6 flex items-center justify-between">
+                <label class="text-xs font-bold text-gray-300 uppercase">Satellite View</label>
+                <div @click="isSatellite = !isSatellite"
+                  class="w-10 h-5 rounded-full relative cursor-pointer transition-colors duration-300"
+                  :class="isSatellite ? 'bg-primary' : 'bg-neutral-700'">
+                  <div class="absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform duration-300"
+                    :style="{ transform: isSatellite ? 'translateX(20px)' : 'translateX(0)' }"></div>
                 </div>
               </div>
 

@@ -49,6 +49,13 @@ export const formatValue = (key, value) => {
         return value.toFixed(0)
     }
 
+    // Lap time (seconds → m:ss.s)
+    if (k === 'lastlaptime') {
+        const m = Math.floor(value / 60)
+        const s = (value % 60).toFixed(1).padStart(4, '0')
+        return `${m}:${s}`
+    }
+
     // Time
     if (k === 'updated' || k === 'timestamp' || k.includes('time')) {
         return new Date(value).toLocaleTimeString()

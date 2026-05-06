@@ -1,0 +1,15 @@
+@font-face {
+  font-family: 'Formula';
+  src: url('./Formula.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'AppDisplayFont';
+  src: url('./911porscha.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}

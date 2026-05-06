@@ -49,7 +49,10 @@
  * @returns {Object} Updated sessions object
  */
 export function updateRaceSessions(sessions, packet, lastLapIndex) {
-    const LAP_KEYS = new Set(['LL_V', 'LL_I', 'LL_RPM', 'LL_Spd', 'LL_Ah', 'LL_Time', 'LL_Eff'])
+    const LAP_KEYS = new Set([
+        'LL_V', 'LL_I', 'LL_RPM', 'LL_Spd', 'LL_Ah', 'LL_Time', 'LL_Eff',
+        'LL_VA_avg', 'LL_VB_avg', 'LL_VA_min', 'LL_VB_min', 'LL_I_max', 'LL_RPM_min',
+    ])
 
     // Extract LL_ data
     let hasLapKeys = false

@@ -24,6 +24,7 @@
 import { ref, computed, onMounted, onUnmounted, onActivated, watch } from 'vue'
 import { useTelemetryStore } from '../../stores/telemetry'
 import { useSettingsStore } from '../../stores/settings'
+import { useChartTheme } from '../../composables/useChartTheme'
 import { connect } from 'echarts/core'
 import TelemetryGraph from '../../components/TelemetryGraph.vue'
 import MasterZoom from '../../components/MasterZoom.vue'
@@ -32,6 +33,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/vue/24/outline'
 
 const telemetry = useTelemetryStore()
 const settings = useSettingsStore()
+const { chartThemeOptions } = useChartTheme()
 
 /** @brief ECharts group name for synchronized charts */
 const CHART_GROUP = 'telemetry_sync_group'
@@ -193,14 +195,14 @@ onActivated(() => {
     <main class="flex-1 flex flex-col overflow-hidden bg-neutral-900">
       <!-- Master Zoom Timeline -->
       <div class="flex-shrink-0 z-10 bg-neutral-900">
-        <MasterZoom v-if="telemetry.history.length > 0" :data="telemetry.displayHistory" :group="CHART_GROUP" />
+        <MasterZoom v-if="telemetry.history.length > 0" :data="telemetry.displayHistory" :group="CHART_GROUP" :chart-theme="chartThemeOptions" />
       </div>
 
       <div class="flex-1 overflow-y-auto space-y-2 px-2 py-2">
         <div v-if="selectedKeys.size > 0">
           <div v-for="key in Array.from(selectedKeys)" :key="key" class="w-full">
             <TelemetryGraph :data="telemetry.displayHistory" :data-key="key" :group="CHART_GROUP"
-              :color="getColor(key)" />
+              :color="getColor(key)" :chart-theme="chartThemeOptions" />
           </div>
         </div>
         <div v-else class="h-full flex items-center justify-center text-gray-500">

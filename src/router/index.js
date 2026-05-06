@@ -8,6 +8,7 @@
 
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { isDirectModeActive } from '../composables/useDirectConnect'
 
 /**
  * @brief Vue Router instance with route definitions.
@@ -50,17 +51,16 @@ const router = createRouter({
  * @brief Navigation guard for authentication.
  * @description Checks if route requires authentication and redirects
  *              unauthenticated users to the login page.
- * 
+ *              Allows through users authenticated via normal account login
+ *              OR via direct Car ID connection.
+ *
  * @param {Object} to - Target route object
- * @param {Object} from - Current route object  
- * @param {Function} next - Navigation callback
  */
-router.beforeEach((to, from, next) => {
+router.beforeEach((to) => {
     const authStore = useAuthStore()
-    if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-        next({ name: 'login' })
-    } else {
-        next()
+    const isAuthorised = authStore.isAuthenticated || isDirectModeActive()
+    if (to.meta.requiresAuth && !isAuthorised) {
+        return { name: 'login' }
     }
 })
 

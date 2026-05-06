@@ -22,3 +22,20 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment config
+OLD.env.production
+
+# Runtime data — not for distribution
+settings-data.json
+telemetry-history/
+*.ndjson
+
+# AI tool files
+.claude/
+
+# Temp / backup files
+BROKEN.*
+OLD*
+*_OLD.*
+*_OLD/

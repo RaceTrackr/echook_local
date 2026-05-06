@@ -17,6 +17,7 @@
  */
 import { onMounted } from 'vue'
 import { useSpectatorStore } from '../stores/spectator'
+import { useSettingsStore } from '../stores/settings'
 import {
     UsersIcon,
     BoltIcon,
@@ -24,6 +25,7 @@ import {
 } from '@heroicons/vue/24/outline'
 
 const spectatorStore = useSpectatorStore()
+const settings = useSettingsStore()
 
 // Ensure connection to public socket for stats
 onMounted(() => {
@@ -38,7 +40,7 @@ onMounted(() => {
         <div class="flex items-center space-x-4">
             <router-link to="/login"
                 class="font-bold text-xl text-white tracking-tight hover:opacity-80 transition cursor-pointer">
-                <span class="font-oswald tracking-normal text-2xl">eChook</span><span class="text-primary">Live</span>
+                <span class="app-display-font tracking-normal text-2xl font-bold">{{ settings.teamName }}</span>
             </router-link>
         </div>
 

@@ -56,6 +56,7 @@ use([
 ]);
 
 import { formatValue, getUnit } from '../utils/formatting'
+import { useTheme } from '../composables/useTheme'
 
 /**
  * @brief Component props definition.
@@ -95,11 +96,58 @@ const props = defineProps({
   showTitle: {
     type: Boolean,
     default: true
+  },
+  /**
+   * @brief Rolling average window in data points (0 = off).
+   * Overrides graphSettings.rollingAverage when set to a positive number.
+   */
+  rollingAverage: {
+    type: Number,
+    default: null
   }
 })
 
 const telemetry = useTelemetryStore()
+const { font } = useTheme()
+
+// Resolve the active font-family string for ECharts options
+const chartFont = computed(() => {
+  const families = {
+    system:          'system-ui, -apple-system, sans-serif',
+    formula:         "'Formula', sans-serif",
+    inter:           "'Inter', sans-serif",
+    roboto:          "'Roboto', sans-serif",
+    'space-grotesk': "'Space Grotesk', sans-serif",
+    rajdhani:        "'Rajdhani', sans-serif",
+    nunito:          "'Nunito', sans-serif",
+    oxanium:         "'Oxanium', sans-serif",
+    jetbrains:       "'JetBrains Mono', monospace",
+    custom:          "'AppCustomFont', sans-serif",
+  }
+  return families[font.value] || families.system
+})
 const chart = ref(null)
+
+/**
+ * @brief Apply an O(n) sliding-window rolling average to the data.
+ * Window size comes from the prop (per-chart override) or graphSettings (global).
+ */
+// Rolling average helper — called directly inside option computed
+const applyRollingAverage = (data, key, w) => {
+  if (!w || w < 2 || !data.length) return data
+  const result = []
+  let sum = 0, count = 0
+  for (let i = 0; i < data.length; i++) {
+    const val = data[i][key]
+    if (val !== null && val !== undefined && !isNaN(Number(val))) { sum += Number(val); count++ }
+    if (i >= w) {
+      const old = data[i - w][key]
+      if (old !== null && old !== undefined && !isNaN(Number(old))) { sum -= Number(old); count-- }
+    }
+    result.push(count > 0 ? { ...data[i], [key]: sum / count } : data[i])
+  }
+  return result
+}
 
 /**
  * @brief Process zoom requests from the telemetry store.
@@ -262,101 +310,189 @@ const getDisplayUnit = (key) => {
  * @type {ComputedRef<Object>}
  */
 const option = computed(() => {
-  const showGrid = telemetry.graphSettings.showGrid
+  const showGrid       = telemetry.graphSettings.showGrid
   const showHighlights = props.showLaps && telemetry.graphSettings.showLapHighlights
+
+  const unit        = getDisplayUnit(props.dataKey)
+  const displayName = telemetry.getDisplayName(props.dataKey)
+  const yAxisName   = unit ? `${displayName} (${unit})` : displayName
 
   return {
     animation: telemetry.graphSettings.showAnimations,
     color: [props.color],
+
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(23, 23, 23, 0.9)',
-      borderColor: '#333',
-      textStyle: { color: '#fff' },
+      backgroundColor: 'rgba(23, 23, 23, 0.95)',
+      borderColor: '#3f3f46',
+      borderWidth: 1,
+      textStyle: { color: '#f4f4f5', fontSize: 12, fontFamily: chartFont.value },
       formatter: (params) => {
         if (!params.length) return ''
-        const date = new Date(params[0].axisValue)
+        const date  = new Date(params[0].axisValue)
         const timeStr = date.toLocaleTimeString()
-        let result = `<div class="font-bold mb-1">${timeStr}</div>`
-
+        const ff = chartFont.value
+        let result = `<div style="font-weight:700;margin-bottom:4px;color:#a1a1aa;font-family:${ff}">${timeStr}</div>`
         params.forEach(item => {
-          const val = item.data[props.dataKey]
+          const val       = item.data[props.dataKey]
           const formatted = formatValue(props.dataKey, val)
-          const unit = getDisplayUnit(props.dataKey)
-
+          const u         = getDisplayUnit(props.dataKey)
           result += `
-            <div class="flex items-center justify-between space-x-4">
-              <span style="color: ${item.color}">● ${item.seriesName}</span>
-              <span class="font-mono font-bold">${formatted} <span class="text-xs text-gray-400">${unit}</span></span>
-            </div>
-           `
+            <div style="display:flex;justify-content:space-between;gap:16px;align-items:center;font-family:${ff}">
+              <span style="color:${item.color}">● ${item.seriesName}</span>
+              <span style="font-weight:700">
+                ${formatted}<span style="font-size:11px;color:#71717a;margin-left:3px">${u}</span>
+              </span>
+            </div>`
         })
         return result
       }
     },
+
     grid: {
-      top: 40,
-      bottom: 20,
-      left: 60,
-      right: 20
+      top:    28,
+      bottom: 36,
+      left:   72,
+      right:  24,
+      containLabel: false,
     },
+
     xAxis: {
       type: 'time',
       boundaryGap: false,
-      axisLine: { lineStyle: { color: '#525252' } },
-      splitLine: { show: showGrid, lineStyle: { color: '#262626' } }
+      name: 'Time',
+      nameLocation: 'end',
+      nameTextStyle: {
+        color: '#71717a',
+        fontSize: 11,
+        fontFamily: chartFont.value,
+        padding: [0, 0, 0, 8],
+      },
+      axisLine: {
+        show: true,
+        lineStyle: { color: '#52525b', width: 1 },
+      },
+      axisTick: {
+        show: true,
+        lineStyle: { color: '#52525b' },
+      },
+      axisLabel: {
+        color: '#a1a1aa',
+        fontSize: 11,
+        fontFamily: chartFont.value,
+        hideOverlap: true,
+        rotate: 0,
+        formatter: (val) => {
+          const d = new Date(val)
+          return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        },
+      },
+      splitLine: {
+        show: showGrid,
+        lineStyle: { color: 'rgba(255,255,255,0.06)', width: 1, type: 'solid' },
+      },
     },
+
     yAxis: {
       type: 'value',
       scale: true,
-      axisLine: { lineStyle: { color: '#525252' } },
-      splitLine: { show: showGrid, lineStyle: { color: '#262626' } }
+      name: yAxisName,
+      nameLocation: 'middle',
+      nameRotate: 90,
+      nameGap: 56,
+      nameTextStyle: {
+        color: '#71717a',
+        fontSize: 11,
+        fontFamily: chartFont.value,
+      },
+      axisLine: {
+        show: true,
+        lineStyle: { color: '#52525b', width: 1 },
+      },
+      axisTick: {
+        show: true,
+        lineStyle: { color: '#52525b' },
+      },
+      axisLabel: {
+        color: '#a1a1aa',
+        fontSize: 11,
+        fontFamily: chartFont.value,
+        formatter: (val) => formatValue(props.dataKey, val),
+      },
+      splitLine: {
+        show: showGrid,
+        lineStyle: { color: 'rgba(255,255,255,0.06)', width: 1, type: 'solid' },
+      },
     },
+
     large: true,
     largeThreshold: 10000,
     progressive: 500,
     progressiveThreshold: 1000,
+
     dataZoom: [
       {
         type: 'inside',
         xAxisIndex: 0,
         zoomOnMouseWheel: 'ctrl',
-        moveOnMouseWheel: 'shift'
+        moveOnMouseWheel: 'shift',
       }
     ],
-    dataset: {
-      source: props.data
-    },
+
+    dataset: [
+      { source: props.data },
+      ...(((props.rollingAverage != null ? props.rollingAverage : telemetry.graphSettings.rollingAverage) || 0) >= 2
+        ? [{ source: applyRollingAverage(
+              props.data,
+              props.dataKey,
+              (props.rollingAverage != null ? props.rollingAverage : telemetry.graphSettings.rollingAverage) || 0
+            ) }]
+        : []),
+    ],
+
     series: [
       {
-        name: props.dataKey,
+        name: displayName,
         type: 'line',
+        datasetIndex: 0,
         showSymbol: false,
         sampling: 'average',
-        encode: {
-          x: 'timestamp',
-          y: props.dataKey
-        },
-        lineStyle: { width: 2 },
+        encode: { x: 'timestamp', y: props.dataKey },
+        lineStyle: { width: 3, cap: 'round', join: 'round' },
         markArea: {
           silent: true,
-          itemStyle: {
-            opacity: 0.1
-          },
+          itemStyle: { opacity: 0.08 },
           label: {
             show: true,
             position: 'insideTop',
             align: 'center',
             verticalAlign: 'top',
-            distance: 0,
-            color: '#666',
-            fontFamily: 'monospace',
-            fontSize: 10
+            distance: 4,
+            color: '#71717a',
+            fontFamily: chartFont.value,
+            fontSize: 10,
           },
-          data: showHighlights ? telemetry.lapMarkAreas : []
-        }
-      }
-    ]
+          data: showHighlights ? telemetry.lapMarkAreas : [],
+        },
+      },
+      // Rolling average overlay — only added when window >= 2
+      ...((((props.rollingAverage != null ? props.rollingAverage : telemetry.graphSettings.rollingAverage) || 0) >= 2) ? [{
+        name: `${displayName} (avg)`,
+        type: 'line',
+        datasetIndex: 1,
+        showSymbol: false,
+        sampling: 'average',
+        encode: { x: 'timestamp', y: props.dataKey },
+        lineStyle: {
+          width: 2,
+          type: 'dashed',
+          cap: 'round',
+          opacity: 0.9,
+        },
+        // Slightly lighter colour — mix toward white/black
+        itemStyle: { color: props.color },
+      }] : []),
+    ],
   }
 })
 
@@ -374,7 +510,7 @@ const handleWheel = (e) => {
 <template>
   <div class="relative overflow-hidden" @wheel.capture="handleWheel"
     :style="{ height: height ? (typeof height === 'number' ? height + 'px' : height) : telemetry.graphSettings.graphHeight + 'px' }">
-    <h3 v-if="showTitle" class="absolute top-2 left-4 text-xs font-bold uppercase tracking-wider text-gray-400 z-10">{{
+    <h3 v-if="showTitle" class="absolute top-2 left-0 right-0 text-xs font-bold uppercase tracking-wider text-gray-500 z-10 text-center pointer-events-none">{{
       telemetry.getDisplayName(dataKey) }}</h3>
     <VChart ref="chart" class="w-full h-full" :option="option" autoresize :group="group" />
   </div>

@@ -10,7 +10,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch, shallowRef } from 'vue'
 import { useAuthStore } from './auth'
-import { useSettingsStore } from './settings'
+import { useSettingsStore, DEFAULT_METRIC_KEYS } from './settings'
 import { updateRaceSessions } from '../utils/raceAnalytics'
 import { decodeMsgpack } from '../utils/msgpack'
 import { scalePacket } from '../utils/unitConversions'
@@ -19,6 +19,7 @@ import { scalePacket } from '../utils/unitConversions'
 import { useSocket } from '../composables/useSocket'
 import { useHistory } from '../composables/useHistory'
 import { useChartZoom } from '../composables/useChartZoom'
+import { useDirectConnect } from '../composables/useDirectConnect'
 import {
     REGULAR_KEYS,
     LAP_KEYS,
@@ -113,11 +114,20 @@ export const useTelemetryStore = defineStore('telemetry', () => {
     // ============================================
 
     /**
+     * @brief Combined connection state — true if either the normal socket
+     *        or the direct Car ID socket is connected.
+     * @type {ComputedRef<boolean>}
+     */
+    const isConnected = computed(() =>
+        socketComposable.isConnected.value || directConnect.isConnected.value
+    )
+
+    /**
      * @brief Whether data is considered stale (no updates in 5+ seconds).
      * @type {ComputedRef<boolean>}
      */
     const isDataStale = computed(() => {
-        if (!socketComposable.isConnected.value) return true
+        if (!isConnected.value) return true
         if (lastPacketTime.value === 0) return true
         return (now.value - lastPacketTime.value) > 5000
     })
@@ -133,10 +143,14 @@ export const useTelemetryStore = defineStore('telemetry', () => {
      * @brief Live data with unit conversions applied.
      * @type {ComputedRef<Object>}
      */
+    const lastLapTime = ref(null)
+
     const displayLiveData = computed(() => {
         const pt = liveData.value
         if (!pt) return {}
-        return scalePacketWithUnits(pt)
+        const scaled = scalePacketWithUnits(pt)
+        if (lastLapTime.value != null) scaled.lastLapTime = lastLapTime.value
+        return scaled
     })
 
     /**
@@ -145,21 +159,8 @@ export const useTelemetryStore = defineStore('telemetry', () => {
      * @type {ComputedRef<string[]>}
      */
     const availableKeys = computed(() => {
-        const keys = new Set()
-
-        // Add keys from live data if they are in REGULAR_KEYS
-        Object.keys(liveData.value).forEach(k => {
-            if (REGULAR_KEYS.has(k)) keys.add(k)
-        })
-
-        // Also check recent history for temporarily missing keys
-        if (history.value.length > 0) {
-            Object.keys(history.value[history.value.length - 1]).forEach(k => {
-                if (REGULAR_KEYS.has(k)) keys.add(k)
-            })
-        }
-
-        return KEY_ORDER.filter(k => keys.has(k))
+        const hidden = new Set(settings.hiddenMetricKeys ?? [])
+        return (settings.metricKeys ?? []).filter(k => !hidden.has(k))
     })
 
     /**
@@ -242,22 +243,70 @@ export const useTelemetryStore = defineStore('telemetry', () => {
      * @param {Object} packet - Telemetry packet with timestamp
      */
     function processLapData(packet) {
-        if (packet.currLap !== undefined) {
-            currentLapIndex.value = packet.currLap
+        const prevLap = currentLapIndex.value
+        const newLap  = packet.currLap
+
+        if (newLap !== undefined) {
+            currentLapIndex.value = newLap
         }
 
-        // Only update races if packet contains lap data
-        const hasLapData = packet['LL_Time'] !== undefined || packet['LL_V'] !== undefined
-        const hasTrackName = packet['track'] !== undefined || packet['Track'] !== undefined || packet['Circuit'] !== undefined
+        const hasTrackName = packet['track'] !== undefined
 
-        if (hasLapData || hasTrackName) {
-            races.value = updateRaceSessions({ ...races.value }, packet, currentLapIndex.value)
+        // When lap number increments, derive LL_* summary from history
+        if (newLap !== undefined && newLap > prevLap && prevLap > 0) {
+            const lapPts = history.value.filter(pt => pt.currLap === prevLap)
 
-            // Update lapHistory array for legacy consumers
-            const latestRace = Object.values(races.value).sort((a, b) => b.startTimeMs - a.startTimeMs)[0]
-            if (latestRace) {
-                lapHistory.value = Object.values(latestRace.laps).sort((a, b) => a.lapNumber - b.lapNumber)
+            if (lapPts.length >= 2) {
+                const avg = (key) => {
+                    const vals = lapPts.map(p => p[key]).filter(v => v != null && !isNaN(v))
+                    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : undefined
+                }
+
+                const lapTimeS  = (lapPts[lapPts.length - 1].timestamp - lapPts[0].timestamp) / 1000
+                const ahStart   = lapPts[0].ampH
+                const ahEnd     = lapPts[lapPts.length - 1].ampH
+                const ahUsed    = (ahStart != null && ahEnd != null) ? Math.max(0, ahEnd - ahStart) : undefined
+
+                const min = (key) => {
+                    const vals = lapPts.map(p => p[key]).filter(v => v != null && !isNaN(v))
+                    return vals.length ? Math.min(...vals) : undefined
+                }
+                const max = (key) => {
+                    const vals = lapPts.map(p => p[key]).filter(v => v != null && !isNaN(v))
+                    return vals.length ? Math.max(...vals) : undefined
+                }
+
+                lastLapTime.value = lapTimeS
+
+                const synthetic = {
+                    ...packet,
+                    currLap:    prevLap,
+                    LL_Time:    lapTimeS,
+                    LL_V:       avg('voltage'),
+                    LL_VA_avg:  avg('voltageLower'),
+                    LL_VB_avg:  avg('voltageHigh'),
+                    LL_VA_min:  min('voltageLower'),
+                    LL_VB_min:  min('voltageHigh'),
+                    LL_I:       avg('current'),
+                    LL_I_max:   max('current'),
+                    LL_RPM:     avg('rpm'),
+                    LL_RPM_min: min('rpm'),
+                    LL_Spd:     avg('speed'),
+                    LL_Ah:      ahUsed,
+                }
+
+                races.value = updateRaceSessions({ ...races.value }, synthetic, prevLap)
             }
+        }
+
+        if (hasTrackName) {
+            races.value = updateRaceSessions({ ...races.value }, packet, currentLapIndex.value)
+        }
+
+        // Update lapHistory for legacy consumers
+        const latestRace = Object.values(races.value).sort((a, b) => b.startTimeMs - a.startTimeMs)[0]
+        if (latestRace) {
+            lapHistory.value = Object.values(latestRace.laps).sort((a, b) => a.lapNumber - b.lapNumber)
         }
     }
 
@@ -265,15 +314,29 @@ export const useTelemetryStore = defineStore('telemetry', () => {
      * @brief Clear race tracking data.
      */
     function clearRaces() {
-        races.value = []
+        races.value = {}
         lapHistory.value = []
         currentLapIndex.value = 0
+        lastLapTime.value = null
     }
 
     /**
      * @brief Handle incoming data from WebSocket.
      * @param {ArrayBuffer} rawData - MessagePack encoded data
      */
+    const INTERNAL_PACKET_KEYS = new Set(['timestamp', 'updated', 'status', 'lat', 'lon', 'track'])
+
+    function autoRegisterMetrics(packet) {
+        const known = new Set(settings.metricKeys)
+        const additions = []
+        Object.keys(packet).forEach(k => {
+            if (!INTERNAL_PACKET_KEYS.has(k) && !known.has(k) && typeof packet[k] === 'number') {
+                additions.push(k)
+            }
+        })
+        if (additions.length) settings.metricKeys = [...settings.metricKeys, ...additions]
+    }
+
     function handleIncomingData(rawData) {
         if (isPaused.value) return
 
@@ -289,6 +352,8 @@ export const useTelemetryStore = defineStore('telemetry', () => {
         })
 
         const timestamp = packet.timestamp || packet.updated || Date.now()
+
+        autoRegisterMetrics(packet)
 
         // 1. Process lap data first (updates races before chart redraw)
         processLapData({ ...packet, timestamp })
@@ -332,6 +397,67 @@ export const useTelemetryStore = defineStore('telemetry', () => {
         }
     }
 
+    /**
+     * @brief Ingest a plain-JS packet from the direct Car ID socket.
+     * @description Identical pipeline to handleIncomingData but skips the
+     *              MessagePack decode step — the direct socket sends JSON.
+     *              Called by DashboardView when useDirectConnect().isDirectMode is true.
+     * @param {Object} rawPacket - Plain object received from data.echook.uk
+     */
+    function ingestDirectPacket(rawPacket) {
+        if (isPaused.value || !rawPacket) return
+
+        // Shallow copy so we don't mutate the original
+        const packet = { ...rawPacket }
+
+        // Auto-cast numeric strings to numbers (same normalisation as handleIncomingData)
+        Object.keys(packet).forEach(key => {
+            const val = packet[key]
+            if (typeof val === 'string' && !isNaN(Number(val)) && val.trim() !== '') {
+                packet[key] = Number(val)
+            }
+        })
+
+        const timestamp = packet.timestamp || packet.updated || Date.now()
+
+        autoRegisterMetrics(packet)
+
+        // 1. Process lap data first
+        processLapData({ ...packet, timestamp })
+
+        // 2. Extract and process regular telemetry keys
+        const regularPacket = {}
+        let hasRegularData = false
+
+        // Normalise capitalised coordinate keys sent by some firmware versions
+        if (packet['Lon'] !== undefined) packet['lon'] = packet['Lon']
+        if (packet['Lat'] !== undefined) packet['lat'] = packet['Lat']
+
+        REGULAR_KEYS.forEach(key => {
+            if (packet[key] !== undefined) {
+                regularPacket[key] = packet[key]
+                hasRegularData = true
+            }
+        })
+
+        regularPacket.timestamp = timestamp
+        if (packet.lat !== undefined) regularPacket.lat = packet.lat
+        if (packet.lon !== undefined) regularPacket.lon = packet.lon
+
+        if (hasRegularData) {
+            const processed = scalePacketWithUnits(regularPacket)
+
+            liveData.value = processed
+            lastPacketTime.value = timestamp
+
+            history.value.push(processed)
+            if (history.value.length > maxHistoryPoints.value) {
+                history.value.shift()
+            }
+            history.value = [...history.value]
+        }
+    }
+
     // ============================================
     // Composables Integration
     // ============================================
@@ -354,6 +480,9 @@ export const useTelemetryStore = defineStore('telemetry', () => {
         onDisconnect: () => { },
         onData: handleIncomingData
     })
+
+    // Direct-connect composable (Car ID login — bypasses normal auth)
+    const directConnect = useDirectConnect()
 
     // History composable
     const historyComposable = useHistory({
@@ -482,7 +611,7 @@ export const useTelemetryStore = defineStore('telemetry', () => {
         liveData.value = {}
         history.value = []
         lapHistory.value = []
-        races.value = []
+        races.value = {}
         lastPacketTime.value = 0
         currentLapIndex.value = 0
         historyComposable.availableDays.value = new Set()
@@ -496,7 +625,7 @@ export const useTelemetryStore = defineStore('telemetry', () => {
     return {
         // Connection State
         socket: socketComposable.socket,
-        isConnected: socketComposable.isConnected,
+        isConnected,          // combined: normal socket OR direct Car ID socket
         lastPacketTime,
         isDataStale,
 
@@ -525,6 +654,7 @@ export const useTelemetryStore = defineStore('telemetry', () => {
 
         // Data Actions
         clearHistory,
+        clearRaces,
         fetchHistory: historyComposable.fetchHistory,
         togglePause,
         fetchAvailableDays: historyComposable.fetchAvailableDays,
@@ -532,6 +662,7 @@ export const useTelemetryStore = defineStore('telemetry', () => {
         loadDay,
         resetToLive,
         resetState,
+        ingestDirectPacket,   // ← used by DashboardView in direct Car ID mode
 
         // Settings Proxies
         maxHistoryPoints,

@@ -14,7 +14,7 @@
 export const REGULAR_KEYS = new Set([
     'voltage', 'current', 'ampH', 'speed', 'rpm', 'throttle',
     'temp1', 'temp2', 'tempDiff', 'voltageLower', 'voltageHigh',
-    'voltageDiff', 'gear', 'brake', 'currLap', 'lat', 'lon', 'track'
+    'voltageDiff', 'gear', 'brake', 'currLap', 'lastLapTime', 'lat', 'lon', 'track'
 ])
 
 /**
@@ -44,6 +44,7 @@ export const KEY_DISPLAY_NAMES = {
     tempDiff: 'Temp Diff',
     ampH: 'Amp Hours',
     currLap: 'Current Lap',
+    lastLapTime: 'Last Lap Time',
     gear: 'Gear',
     brake: 'Brake',
     lat: 'Latitude',
@@ -85,7 +86,7 @@ export const KEY_ORDER = [
     'speed', 'rpm', 'throttle', 'voltageLower',
     'voltageHigh', 'voltageDiff', 'gear', 'brake',
     'temp1', 'temp2', 'tempDiff',
-    'currLap', 'lat', 'lon', 'track'
+    'currLap', 'lastLapTime', 'lat', 'lon', 'track'
 ]
 
 /**
