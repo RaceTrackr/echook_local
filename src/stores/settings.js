@@ -151,6 +151,9 @@ export const useSettingsStore = defineStore('settings', () => {
     /** @brief Whether the data ribbon is collapsed */
     const ribbonCollapsed = ref(false)
 
+    /** @brief SpeedHive event code for the Standings tab (e.g. UYRPNDLQ-2147486040) */
+    const standingsCode = ref('')
+
     /** @brief Keys hidden from the standalone dashboard tab (independent of ribbon) */
     const dashboardTabHiddenKeys = ref([])
 
@@ -244,6 +247,7 @@ export const useSettingsStore = defineStore('settings', () => {
         if (newData.ribbonHiddenKeys) ribbonHiddenKeys.value = newData.ribbonHiddenKeys
         if (newData.ribbonOverflow) ribbonOverflow.value = newData.ribbonOverflow
         if (newData.ribbonCollapsed !== undefined) ribbonCollapsed.value = newData.ribbonCollapsed
+        if (newData.standingsCode !== undefined) standingsCode.value = newData.standingsCode
         if (newData.dashboardTabHiddenKeys) dashboardTabHiddenKeys.value = newData.dashboardTabHiddenKeys
         if (newData.panelLayout) panelLayout.value = newData.panelLayout
         if (newData.panelGridCols !== undefined) panelGridCols.value = newData.panelGridCols
@@ -283,6 +287,7 @@ export const useSettingsStore = defineStore('settings', () => {
         ribbonHiddenKeys,
         ribbonOverflow,
         ribbonCollapsed,
+        standingsCode,
         dashboardTabHiddenKeys,
         panelLayout,
         panelGridCols,

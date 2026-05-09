@@ -35,10 +35,11 @@ const LapsTab      = defineAsyncComponent(() => import('../components/tabs/LapsT
 const SettingsTab  = defineAsyncComponent(() => import('../components/tabs/SettingsTab.vue'))
 const AdminTab     = defineAsyncComponent(() => import('../components/tabs/AdminTab.vue'))
 const DashboardTab = defineAsyncComponent(() => import('../components/tabs/DashboardTab.vue'))
-const GrafanaTab   = defineAsyncComponent(() => import('../components/tabs/GrafanaTab.vue'))
+const GrafanaTab      = defineAsyncComponent(() => import('../components/tabs/GrafanaTab.vue'))
+const StandingsTab    = defineAsyncComponent(() => import('../components/tabs/StandingsTab.vue'))
 
 // Heroicons for tab navigation
-import { ChartBarIcon, MapIcon, FlagIcon, CogIcon, ShieldCheckIcon, Squares2X2Icon, RectangleGroupIcon } from '@heroicons/vue/24/outline'
+import { ChartBarIcon, MapIcon, FlagIcon, CogIcon, ShieldCheckIcon, Squares2X2Icon, RectangleGroupIcon, TrophyIcon } from '@heroicons/vue/24/outline'
 
 const telemetry = useTelemetryStore()
 const auth = useAuthStore()
@@ -130,9 +131,10 @@ const tabs = computed(() => {
   // NOTE: graph, dashboard, map and laps are intentionally hidden from the tab bar
   // but their components are fully intact and can be re-enabled by adding them back here.
   const baseTabs = [
-    { id: 'panels', label: 'Panels', icon: RectangleGroupIcon, component: GrafanaTab },
-    { id: 'graph',  label: 'Graph',  icon: ChartBarIcon,       component: GraphTab   },
-    { id: 'laps',   label: 'Laps',   icon: FlagIcon,           component: LapsTab    },
+    { id: 'panels',    label: 'Panels',    icon: RectangleGroupIcon, component: GrafanaTab    },
+    { id: 'graph',     label: 'Graph',     icon: ChartBarIcon,       component: GraphTab      },
+    { id: 'laps',      label: 'Laps',      icon: FlagIcon,           component: LapsTab       },
+    { id: 'standings', label: 'Live Timing', icon: TrophyIcon,        component: StandingsTab  },
   ]
 
   if (settings.isAdminMode) {
@@ -448,6 +450,13 @@ const handleKeydown = (e) => {
         <KeepAlive>
           <component :is="activeComponent" />
         </KeepAlive>
+
+        <!-- Iframe focus-mode intercept — captures the first tap when controls are hidden -->
+        <div
+          v-if="focusMode && !showFocusControls"
+          class="absolute inset-0 z-30 cursor-pointer"
+          @click="revealFocusControls"
+        />
 
         <!-- Floating exit button — revealed by tapping the screen in focus mode -->
         <button

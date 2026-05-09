@@ -29,6 +29,7 @@ const openSections = reactive({
   theme:       false,
   ribbon:      false,
   keybindings: false,
+  standings:   false,
   units:       false,
   performance: false,
   rawData:     false,
@@ -500,6 +501,36 @@ const resetBindings = () => {
               class="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 text-white rounded transition text-sm font-medium flex items-center">
               <InformationCircleIcon class="w-4 h-4 mr-2" />
               View Keyboard Shortcuts
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Live Standings ────────────────────────────────────────────── -->
+      <section class="bg-neutral-800/50 rounded-lg border border-neutral-700 overflow-hidden">
+        <button @click="toggleSection('standings')"
+          class="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-neutral-700/30 transition">
+          <div>
+            <h3 class="text-lg font-semibold text-white">Live Timing</h3>
+            <p class="text-xs text-gray-500 mt-0.5">SpeedHive event code shown in the Live Timing tab</p>
+          </div>
+          <ChevronDownIcon class="w-5 h-5 text-gray-400 transition-transform duration-200 flex-shrink-0"
+            :class="openSections.standings ? 'rotate-180' : ''" />
+        </button>
+
+        <div v-show="openSections.standings" class="px-6 pb-6 border-t border-neutral-700 pt-4 space-y-3">
+          <input v-model="settings.standingsCode" type="text"
+            placeholder="e.g. UYRPNDLQ-2147486040"
+            class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white font-mono
+                   focus:border-primary focus:ring-1 focus:ring-primary outline-none transition" />
+          <div class="flex gap-2 items-start">
+            <p class="flex-1 text-xs text-gray-600">
+              The event code from the SpeedHive URL — the part after <span class="text-gray-500 font-mono">/livetiming/</span>.
+              The app will always load the active session automatically.
+            </p>
+            <button v-if="settings.standingsCode" @click="settings.standingsCode = ''"
+              class="text-xs text-gray-600 hover:text-red-400 transition flex-shrink-0">
+              Clear
             </button>
           </div>
         </div>
