@@ -31,6 +31,7 @@ const openSections = reactive({
   keybindings: false,
   units:       false,
   performance: false,
+  rawData:     false,
 })
 
 const toggleSection = (key) => { openSections[key] = !openSections[key] }
@@ -622,6 +623,41 @@ const resetBindings = () => {
               </div>
             </SwitchGroup>
           </div>
+        </div>
+      </section>
+
+      <!-- ── Raw Data ──────────────────────────────────────────────────────── -->
+      <section class="bg-neutral-800/50 rounded-lg border border-neutral-700 overflow-hidden">
+        <button @click="toggleSection('rawData')"
+          class="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-neutral-700/30 transition">
+          <div>
+            <h3 class="text-lg font-semibold text-white">Raw Live Data</h3>
+            <p class="text-xs text-gray-500 mt-0.5">Decoded packet as received — no unit scaling or filtering</p>
+          </div>
+          <ChevronDownIcon class="w-5 h-5 text-gray-400 transition-transform duration-200 flex-shrink-0"
+            :class="openSections.rawData ? 'rotate-180' : ''" />
+        </button>
+
+        <div v-if="openSections.rawData" class="border-t border-neutral-700">
+          <div v-if="Object.keys(telemetry.rawLiveData).length === 0"
+            class="px-6 py-8 text-center text-gray-500 text-sm italic">
+            No data received yet.
+          </div>
+          <table v-else class="w-full text-sm">
+            <thead class="bg-neutral-900">
+              <tr>
+                <th class="px-6 py-2 text-left text-xs font-bold uppercase tracking-wider text-gray-500 w-1/2">Key</th>
+                <th class="px-6 py-2 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Value</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-neutral-700/50">
+              <tr v-for="(value, key) in telemetry.rawLiveData" :key="key"
+                class="hover:bg-neutral-700/30 transition font-mono">
+                <td class="px-6 py-1.5 text-primary text-xs">{{ key }}</td>
+                <td class="px-6 py-1.5 text-gray-200 text-xs">{{ value }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 

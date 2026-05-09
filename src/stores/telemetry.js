@@ -49,6 +49,9 @@ export const useTelemetryStore = defineStore('telemetry', () => {
     /** @brief Latest telemetry packet (scaled for display) */
     const liveData = ref({})
 
+    /** @brief Raw decoded packet as received — no unit scaling or key filtering */
+    const rawLiveData = ref({})
+
     /**
      * @brief Historical telemetry data array.
      * @description Uses shallowRef for performance - array mutations are batched.
@@ -351,6 +354,8 @@ export const useTelemetryStore = defineStore('telemetry', () => {
             }
         })
 
+        rawLiveData.value = { ...packet }
+
         const timestamp = packet.timestamp || packet.updated || Date.now()
 
         autoRegisterMetrics(packet)
@@ -631,6 +636,7 @@ export const useTelemetryStore = defineStore('telemetry', () => {
 
         // Data State
         liveData,
+        rawLiveData,
         history,
         displayHistory: history,
         lapHistory,
