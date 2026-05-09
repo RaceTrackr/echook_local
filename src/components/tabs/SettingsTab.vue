@@ -3,7 +3,8 @@
   @brief User settings and preferences component.
 -->
 <script setup>
-import { computed, ref, reactive, watchEffect } from 'vue'
+import { computed, ref, reactive, watchEffect, onMounted } from 'vue'
+import QRCode from 'qrcode'
 import { useTelemetryStore } from '../../stores/telemetry'
 import { useSettingsStore } from '../../stores/settings'
 import ThemePicker from '../ui/ThemePicker.vue'
@@ -25,6 +26,7 @@ const settings  = useSettingsStore()
 // ── Collapsible sections ──────────────────────────────────────────────────────
 
 const openSections = reactive({
+  qr:          false,
   admin:       false,
   theme:       false,
   ribbon:      false,
@@ -206,6 +208,27 @@ const resetBindings = () => {
     focusMode: 'f',
   }
 }
+
+// ── QR Code ───────────────────────────────────────────────────────────────────
+
+const qrDataUrl    = ref('')
+const networkUrls  = ref([])
+
+onMounted(async () => {
+  try {
+    const res        = await fetch('/api/network-info')
+    const { ips, port } = await res.json()
+    networkUrls.value = ips.map(ip => `http://${ip}:${port}`)
+    const target = networkUrls.value[0] || window.location.origin
+    qrDataUrl.value = await QRCode.toDataURL(target, {
+      width:  220,
+      margin: 2,
+      color:  { dark: '#ffffff', light: '#262626' },
+    })
+  } catch (err) {
+    console.error('QR code generation failed:', err)
+  }
+})
 </script>
 
 <template>
@@ -253,6 +276,34 @@ const resetBindings = () => {
         <input type="file" ref="fileInput" class="hidden" accept=".echook_settings,application/json"
           @change="handleFileLoad" />
       </div>
+
+      <!-- ── QR Code ─────────────────────────────────────────────────────── -->
+      <section class="bg-neutral-800/50 rounded-lg border border-neutral-700 overflow-hidden">
+        <button @click="toggleSection('qr')"
+          class="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-neutral-700/30 transition">
+          <div>
+            <h3 class="text-lg font-semibold text-white">Open on Another Device</h3>
+            <p class="text-xs text-gray-500 mt-0.5">Scan to open the dashboard on a phone or tablet</p>
+          </div>
+          <ChevronDownIcon class="w-5 h-5 text-gray-400 transition-transform duration-200"
+            :class="openSections.qr ? 'rotate-180' : ''" />
+        </button>
+
+        <div v-show="openSections.qr" class="px-6 pb-6 border-t border-neutral-700 pt-4">
+          <div v-if="!qrDataUrl" class="text-sm text-gray-500 italic">
+            Generating QR code…
+          </div>
+          <div v-else class="flex flex-col items-center gap-4">
+            <img :src="qrDataUrl" alt="Dashboard QR code" class="rounded-lg" width="220" height="220" />
+            <div class="text-center space-y-1">
+              <p v-for="url in networkUrls" :key="url" class="text-xs font-mono text-primary">{{ url }}</p>
+              <p v-if="networkUrls.length === 0" class="text-xs text-gray-500">
+                No network interfaces found — are you connected to a network?
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <!-- ── Admin ───────────────────────────────────────────────────────── -->
       <section class="bg-neutral-800/50 rounded-lg border border-neutral-700 overflow-hidden">

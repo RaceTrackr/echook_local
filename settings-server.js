@@ -201,6 +201,16 @@ app.get('/api/history/:carId', (req, res) => {
   }
 })
 
+// GET /api/network-info — returns the server's local-network IP addresses and Vite port
+// so the frontend can build a QR code pointing at the correct network URL.
+app.get('/api/network-info', (req, res) => {
+  const ips = Object.values(os.networkInterfaces())
+    .flat()
+    .filter(iface => iface.family === 'IPv4' && !iface.internal)
+    .map(iface => iface.address)
+  res.json({ ips, port: VITE_PORT })
+})
+
 // GET /api/is-local — returns true only if the browser is on the host machine.
 // Vite proxy forwards requests from all devices, so req.ip is always 127.0.0.1.
 // The proxy sets X-Real-IP to the actual browser's IP so we can distinguish.

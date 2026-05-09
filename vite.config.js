@@ -42,6 +42,17 @@ export default defineConfig({
         ws: false,
         configure: forwardRealIp,
       },
+      '/api/network-info': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        ws: false,
+      },
+      '/api/is-local': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        ws: false,
+        configure: forwardRealIp,
+      },
       '/api': {
         target: 'https://data.echook.uk',
         changeOrigin: true,
