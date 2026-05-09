@@ -18,6 +18,7 @@
  * - Responsive layout (mobile bottom tabs, desktop side tabs)
  */
 import { onMounted, onUnmounted, ref, computed, watch, provide, shallowRef, defineAsyncComponent } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useTelemetryStore } from '../stores/telemetry'
 import { useAuthStore } from '../stores/auth'
 import { useSettingsStore } from '../stores/settings'
@@ -45,6 +46,8 @@ const telemetry = useTelemetryStore()
 const auth = useAuthStore()
 const settings = useSettingsStore()
 const directConnect = useDirectConnect()
+const route = useRoute()
+const router = useRouter()
 
 /** @brief Focus mode — hides header, ribbon, and sidebar so the tab fills the window */
 const focusMode = ref(false)
@@ -152,6 +155,22 @@ const activeComponent = computed(() => {
   if (activeTabId.value === 'settings') return SettingsTab
   const tab = tabs.value.find(t => t.id === activeTabId.value)
   return tab ? tab.component : GraphTab
+})
+
+// URL → tab: handles address-bar navigation and initial load
+watch(() => route.query.tab, (tabFromUrl) => {
+  const allTabIds = ['settings', ...tabs.value.map(t => t.id)]
+  const id = String(tabFromUrl ?? '')
+  if (id && allTabIds.includes(id) && settings.activeTabId !== id) {
+    settings.activeTabId = id
+  }
+}, { immediate: true })
+
+// tab → URL: keeps the address bar in sync when tabs are clicked
+watch(activeTabId, (val) => {
+  if (route.query.tab !== val) {
+    router.replace({ query: { tab: val } })
+  }
 })
 
 // ============================================
