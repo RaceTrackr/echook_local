@@ -1,15 +1,44 @@
 <!--
   @file components/tabs/StandingsTab.vue
-  @brief Live race standings via embedded SpeedHive iframe.
+  @brief Live timing via embedded SpeedHive iframe.
 -->
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useSettingsStore } from '../../stores/settings'
 
 const settings = useSettingsStore()
 const url = computed(() => {
   const code = settings.standingsCode?.trim()
   return code ? `https://speedhive.mylaps.com/livetiming/${code}/active` : ''
+})
+
+// Scale the iframe to fit the container width with no horizontal scroll.
+// SpeedHive is built for a ~1280px desktop viewport — on narrower screens
+// we shrink it proportionally via CSS transform.
+const DESKTOP_W = 1280
+const containerRef = ref(null)
+const containerWidth = ref(DESKTOP_W)
+
+let ro
+onMounted(() => {
+  ro = new ResizeObserver(entries => {
+    containerWidth.value = entries[0].contentRect.width
+  })
+  if (containerRef.value) ro.observe(containerRef.value)
+})
+onUnmounted(() => ro?.disconnect())
+
+const scale = computed(() => Math.min(1, containerWidth.value / DESKTOP_W))
+
+const iframeStyle = computed(() => {
+  const s = scale.value
+  return {
+    width:           `${DESKTOP_W}px`,
+    height:          `${100 / s}%`,
+    transform:       `scale(${s})`,
+    transformOrigin: 'top left',
+    border:          'none',
+  }
 })
 </script>
 
@@ -28,13 +57,15 @@ const url = computed(() => {
       </p>
     </div>
 
-    <!-- Iframe -->
-    <iframe
-      v-else
-      :src="url"
-      class="flex-1 w-full border-0"
-      allow="fullscreen"
-      referrerpolicy="no-referrer"
-    />
+    <!-- Scaled iframe wrapper -->
+    <div v-else ref="containerRef" class="flex-1 relative overflow-hidden">
+      <iframe
+        :src="url"
+        :style="iframeStyle"
+        class="absolute top-0 left-0"
+        allow="fullscreen"
+        referrerpolicy="no-referrer"
+      />
+    </div>
   </div>
 </template>
