@@ -104,7 +104,11 @@ const props = defineProps({
   rollingAverage: {
     type: Number,
     default: null
-  }
+  },
+  /** @brief Fixed Y-axis minimum (null = auto) */
+  yMin: { type: Number, default: null },
+  /** @brief Fixed Y-axis maximum (null = auto) */
+  yMax: { type: Number, default: null },
 })
 
 const telemetry = useTelemetryStore()
@@ -395,7 +399,9 @@ const option = computed(() => {
 
     yAxis: {
       type: 'value',
-      scale: true,
+      scale: props.yMin === null && props.yMax === null,
+      min: props.yMin ?? undefined,
+      max: props.yMax ?? undefined,
       name: yAxisName,
       nameLocation: 'middle',
       nameRotate: 90,

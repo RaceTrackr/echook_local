@@ -371,6 +371,7 @@ const emptyDraft = () => ({
   content: '', fontSize: 'md', capacityAh: 25, sparkline: false, lapMetric: 'LL_Time', lapCount: 5,
   mapSettings: { satellite: false, trailSeconds: 300, metric: 'speed' },
   min: null, max: null, unit: '',
+  yMin: null, yMax: null,
   thresholds: [
     { value: null, color: 'adaptive' },
     { value: null, color: '#f59e0b' },
@@ -660,6 +661,8 @@ const onPanelClick = (e, panel) => {
               :chart-height="chartH(panel)"
               :line-color="panel.color"
               :rolling-average="panel.rollingAverage ?? 0"
+              :y-min="panel.yMin ?? null"
+              :y-max="panel.yMax ?? null"
               :display-name="telemetry.getDisplayName(panel.key)" :is-stale="telemetry.isDataStale" />
             <TextPanel  v-else-if="panel.type === 'text'"
               :panel="panel"
@@ -903,6 +906,32 @@ const onPanelClick = (e, panel) => {
                 </button>
               </div>
               <p class="text-[10px] text-gray-600 mt-1.5">Smooths the line by averaging the last N data points.</p>
+            </div>
+
+            <!-- Y-axis range (line type only) -->
+            <div v-if="draft.type === 'line'">
+              <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Y-Axis Range</label>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[10px] text-gray-500 mb-1">Min</label>
+                  <input
+                    :value="draft.yMin ?? ''"
+                    @input="draft.yMin = $event.target.value === '' ? null : Number($event.target.value)"
+                    type="number" placeholder="Auto"
+                    class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white
+                           font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
+                </div>
+                <div>
+                  <label class="block text-[10px] text-gray-500 mb-1">Max</label>
+                  <input
+                    :value="draft.yMax ?? ''"
+                    @input="draft.yMax = $event.target.value === '' ? null : Number($event.target.value)"
+                    type="number" placeholder="Auto"
+                    class="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white
+                           font-mono focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
+                </div>
+              </div>
+              <p class="text-[10px] text-gray-600 mt-1.5">Leave blank to auto-scale from the data.</p>
             </div>
 
             <!-- Columns + Rows -->

@@ -18,6 +18,8 @@ const props = defineProps({
   rollingAverage: { type: Number,  default: 0     },
   displayName:    { type: String,  default: ''    },
   isStale:        { type: Boolean, default: false },
+  yMin:           { type: Number,  default: null  },
+  yMax:           { type: Number,  default: null  },
 })
 
 const { mode, accent } = useTheme()
@@ -56,6 +58,8 @@ const filteredData = computed(() => {
       :height="chartHeight"
       :rolling-average="rollingAverage"
       :show-title="false"
+      :y-min="yMin"
+      :y-max="yMax"
     />
   </div>
 </template>
