@@ -19,14 +19,31 @@ const DESKTOP_W = 1280
 const containerRef = ref(null)
 const containerWidth = ref(DESKTOP_W)
 
-let ro
+const POLL_MS = 30_000
+let ro, pollTimer
+
+const pollCode = async () => {
+  try {
+    const res  = await fetch('/api/settings')
+    const data = await res.json()
+    if (data.standingsCode !== undefined && data.standingsCode !== settings.standingsCode) {
+      settings.standingsCode = data.standingsCode
+    }
+  } catch { /* server unreachable — keep current code */ }
+}
+
 onMounted(() => {
   ro = new ResizeObserver(entries => {
     containerWidth.value = entries[0].contentRect.width
   })
   if (containerRef.value) ro.observe(containerRef.value)
+  pollTimer = setInterval(pollCode, POLL_MS)
 })
-onUnmounted(() => ro?.disconnect())
+
+onUnmounted(() => {
+  ro?.disconnect()
+  clearInterval(pollTimer)
+})
 
 const scale = computed(() => Math.min(1, containerWidth.value / DESKTOP_W))
 

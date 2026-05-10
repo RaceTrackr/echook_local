@@ -57,6 +57,9 @@ export function useServerSettings() {
     maxHistoryPoints:       settings.maxHistoryPoints,
     adminPassword:          settings.adminPassword,
     savedCars:              settings.savedCars,
+    standingsCode:          settings.standingsCode,
+    metricKeys:             settings.metricKeys,
+    hiddenMetricKeys:       settings.hiddenMetricKeys,
   })
 
   /** Fetch server settings and merge into store, overwriting local overrides. */

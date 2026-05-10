@@ -213,11 +213,17 @@ const resetBindings = () => {
 
 const qrDataUrl    = ref('')
 const networkUrls  = ref([])
+const isLocal      = ref(false)
 
 onMounted(async () => {
   try {
-    const res        = await fetch('/api/network-info')
-    const { ips, port } = await res.json()
+    const [networkRes, localRes] = await Promise.all([
+      fetch('/api/network-info'),
+      fetch('/api/is-local'),
+    ])
+    const { ips, port } = await networkRes.json()
+    const { isLocal: local } = await localRes.json()
+    isLocal.value = local
     networkUrls.value = ips.map(ip => `http://${ip}:${port}`)
     const target = networkUrls.value[0] || window.location.origin
     qrDataUrl.value = await QRCode.toDataURL(target, {
@@ -572,14 +578,19 @@ onMounted(async () => {
         <div v-show="openSections.standings" class="px-6 pb-6 border-t border-neutral-700 pt-4 space-y-3">
           <input v-model="settings.standingsCode" type="text"
             placeholder="e.g. UYRPNDLQ-2147486040"
+            :disabled="!isLocal"
             class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white font-mono
-                   focus:border-primary focus:ring-1 focus:ring-primary outline-none transition" />
+                   focus:border-primary focus:ring-1 focus:ring-primary outline-none transition
+                   disabled:opacity-50 disabled:cursor-not-allowed" />
           <div class="flex gap-2 items-start">
-            <p class="flex-1 text-xs text-gray-600">
+            <p v-if="!isLocal" class="flex-1 text-xs text-gray-500 italic">
+              Live Timing can only be configured from the host computer.
+            </p>
+            <p v-else class="flex-1 text-xs text-gray-600">
               The event code from the SpeedHive URL — the part after <span class="text-gray-500 font-mono">/livetiming/</span>.
               The app will always load the active session automatically.
             </p>
-            <button v-if="settings.standingsCode" @click="settings.standingsCode = ''"
+            <button v-if="settings.standingsCode && isLocal" @click="settings.standingsCode = ''"
               class="text-xs text-gray-600 hover:text-red-400 transition flex-shrink-0">
               Clear
             </button>

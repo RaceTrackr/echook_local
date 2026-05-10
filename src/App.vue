@@ -81,10 +81,29 @@ watchEffect(() => {
 
 // ── Favicon ───────────────────────────────────────────────────────────────────
 const defaultFavicon = document.querySelector("link[rel~='icon']")?.href ?? ''
-watchEffect(() => {
+
+const setFavicon = (src) => {
   const link = document.querySelector("link[rel~='icon']")
-  if (link) link.href = settingsStore.teamBadge || defaultFavicon
-})
+  if (!link) return
+  if (!src) { link.href = defaultFavicon; return }
+
+  const img = new Image()
+  img.crossOrigin = 'anonymous'
+  img.onload = () => {
+    const SIZE = 64
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = SIZE
+    const ctx = canvas.getContext('2d')
+    const scale = Math.min(SIZE / img.width, SIZE / img.height)
+    const w = img.width  * scale
+    const h = img.height * scale
+    ctx.drawImage(img, (SIZE - w) / 2, (SIZE - h) / 2, w, h)
+    link.href = canvas.toDataURL()
+  }
+  img.src = src
+}
+
+watchEffect(() => setFavicon(settingsStore.teamBadge))
 </script>
 
 <template>

@@ -131,13 +131,12 @@ const activeTabId = computed({
  * @type {ComputedRef<Array<Object>>}
  */
 const tabs = computed(() => {
-  // NOTE: graph, dashboard, map and laps are intentionally hidden from the tab bar
-  // but their components are fully intact and can be re-enabled by adding them back here.
   const baseTabs = [
-    { id: 'panels',    label: 'Panels',    icon: RectangleGroupIcon, component: GrafanaTab    },
-    { id: 'graph',     label: 'Graph',     icon: ChartBarIcon,       component: GraphTab      },
-    { id: 'laps',      label: 'Laps',      icon: FlagIcon,           component: LapsTab       },
-    { id: 'standings', label: 'Live Timing', icon: TrophyIcon,        component: StandingsTab  },
+    { id: 'panels',    label: 'Panels',      icon: RectangleGroupIcon, component: GrafanaTab    },
+    { id: 'graph',     label: 'Graph',       icon: ChartBarIcon,       component: GraphTab      },
+    { id: 'map',       label: 'Map',         icon: MapIcon,            component: MapTab        },
+    { id: 'laps',      label: 'Laps',        icon: FlagIcon,           component: LapsTab       },
+    { id: 'standings', label: 'Live Timing', icon: TrophyIcon,         component: StandingsTab  },
   ]
 
   if (settings.isAdminMode) {
@@ -465,7 +464,7 @@ const handleKeydown = (e) => {
       </aside>
 
       <!-- Tab Content Area — bottom padding on mobile reserves space for the fixed nav + safe area -->
-      <main class="flex-1 overflow-hidden relative md:pb-0 mobile-content-pb" @click="revealFocusControls">
+      <main class="flex-1 overflow-hidden relative md:pb-0" :class="{ 'mobile-content-pb': !focusMode }" @click="revealFocusControls">
         <KeepAlive>
           <component :is="activeComponent" />
         </KeepAlive>
