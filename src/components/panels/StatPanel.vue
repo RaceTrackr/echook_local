@@ -78,7 +78,7 @@ const sparklinePath = computed(() => {
     </p>
     <div class="flex-1 flex items-center justify-center gap-1 min-w-0 w-full overflow-hidden relative">
       <span
-        class="font-bold font-mono tabular-nums leading-none transition-colors duration-300 truncate min-w-0"
+        class="font-bold tabular-nums leading-none transition-colors duration-300 truncate min-w-0"
         :class="isStale ? 'text-gray-600' : ''"
         :style="isStale ? { fontSize: 'clamp(1.5rem, 14cqh, 4.5rem)' } : { color, fontSize: 'clamp(1.5rem, 14cqh, 4.5rem)' }">
         {{ fmtValue }}

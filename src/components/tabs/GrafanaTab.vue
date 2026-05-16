@@ -14,7 +14,8 @@ import { ref, computed, watch, inject, onMounted, onUnmounted, nextTick } from '
 import { useTelemetryStore } from '../../stores/telemetry'
 import { useSettingsStore  } from '../../stores/settings'
 import StatPanel    from '../panels/StatPanel.vue'
-import GaugePanel   from '../panels/GaugePanel.vue'
+import GaugePanel       from '../panels/GaugePanel.vue'
+import NeedleGaugePanel from '../panels/NeedleGaugePanel.vue'
 import BarPanel     from '../panels/BarPanel.vue'
 import LinePanel    from '../panels/LinePanel.vue'
 import TextPanel    from '../panels/TextPanel.vue'
@@ -444,7 +445,7 @@ const setThresholdColor = (i, c) => {
   draft.value.thresholds[i] = { ...draft.value.thresholds[i], color: c }
 }
 
-const needsRange = computed(() => ['gauge', 'bar'].includes(draft.value.type))
+const needsRange = computed(() => ['gauge', 'needle', 'bar'].includes(draft.value.type))
 const getValue   = (key) => telemetry.displayLiveData?.[key] ?? null
 
 const onPanelClick = (e, panel) => {
@@ -653,6 +654,9 @@ const onPanelClick = (e, panel) => {
             <GaugePanel v-else-if="panel.type === 'gauge'"
               :panel="panel" :value="getValue(panel.key)"
               :display-name="telemetry.getDisplayName(panel.key)" :is-stale="telemetry.isDataStale" />
+            <NeedleGaugePanel v-else-if="panel.type === 'needle'"
+              :panel="panel" :value="getValue(panel.key)"
+              :display-name="telemetry.getDisplayName(panel.key)" :is-stale="telemetry.isDataStale" />
             <BarPanel   v-else-if="panel.type === 'bar'"
               :panel="panel" :value="getValue(panel.key)"
               :display-name="telemetry.getDisplayName(panel.key)" :is-stale="telemetry.isDataStale" />
@@ -768,11 +772,11 @@ const onPanelClick = (e, panel) => {
               <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Type</label>
               <div class="grid grid-cols-4 gap-2">
                 <button v-for="t in [
-                  { id:'stat',    label:'Stat',    icon:'123' }, { id:'gauge',   label:'Gauge',   icon:'◎' },
-                  { id:'bar',     label:'Bar',     icon:'▬'  }, { id:'line',    label:'Line',    icon:'📈' },
-                  { id:'text',    label:'Text',    icon:'T'  }, { id:'map',     label:'Map',     icon:'🗺'  },
-                  { id:'battery',  label:'Battery', icon:'🔋' },
-                  { id:'lapchart', label:'Laps',    icon:'🏁' },
+                  { id:'stat',    label:'Stat',    icon:'123' }, { id:'gauge',   label:'Gauge',   icon:'◎'  },
+                  { id:'needle',  label:'Needle',  icon:'🔩' }, { id:'bar',     label:'Bar',     icon:'▬'  },
+                  { id:'line',    label:'Line',    icon:'📈' }, { id:'text',    label:'Text',    icon:'T'  },
+                  { id:'map',     label:'Map',     icon:'🗺'  }, { id:'battery', label:'Battery', icon:'🔋' },
+                  { id:'lapchart', label:'Laps',   icon:'🏁' },
                 ]" :key="t.id" @click="draft.type = t.id"
                   class="flex flex-col items-center gap-1 py-2.5 rounded-lg border text-xs font-semibold transition"
                   :class="draft.type === t.id
