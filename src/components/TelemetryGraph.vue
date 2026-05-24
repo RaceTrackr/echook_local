@@ -57,6 +57,7 @@ use([
 
 import { formatValue, getUnit } from '../utils/formatting'
 import { useTheme } from '../composables/useTheme'
+import { useFormatValue } from '../composables/useFormatValue'
 
 /**
  * @brief Component props definition.
@@ -113,6 +114,7 @@ const props = defineProps({
 
 const telemetry = useTelemetryStore()
 const { font } = useTheme()
+const fmt = useFormatValue()
 
 // Resolve the active font-family string for ECharts options
 const chartFont = computed(() => {
@@ -339,7 +341,7 @@ const option = computed(() => {
         let result = `<div style="font-weight:700;margin-bottom:4px;color:#a1a1aa;font-family:${ff}">${timeStr}</div>`
         params.forEach(item => {
           const val       = item.data[props.dataKey]
-          const formatted = formatValue(props.dataKey, val)
+          const formatted = fmt(props.dataKey, val)
           const u         = getDisplayUnit(props.dataKey)
           result += `
             <div style="display:flex;justify-content:space-between;gap:16px;align-items:center;font-family:${ff}">
@@ -423,7 +425,7 @@ const option = computed(() => {
         color: '#a1a1aa',
         fontSize: 11,
         fontFamily: chartFont.value,
-        formatter: (val) => formatValue(props.dataKey, val),
+        formatter: (val) => fmt(props.dataKey, val),
       },
       splitLine: {
         show: showGrid,

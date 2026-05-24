@@ -60,6 +60,7 @@ export function useServerSettings() {
     standingsCode:          settings.standingsCode,
     metricKeys:             settings.metricKeys,
     hiddenMetricKeys:       settings.hiddenMetricKeys,
+    metricPrecision:        settings.metricPrecision,
   })
 
   /** Fetch server settings and merge into store, overwriting local overrides. */

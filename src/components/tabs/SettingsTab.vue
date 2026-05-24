@@ -162,6 +162,15 @@ const changeAdminPassword = () => {
   setTimeout(() => { passwordChangeMsg.value = null }, 3000)
 }
 
+// ── Metric precision ─────────────────────────────────────────────────────────
+
+const setMetricPrecision = (key, dp) => {
+  const updated = { ...settings.metricPrecision }
+  if (dp === null) delete updated[key]
+  else updated[key] = dp
+  settings.metricPrecision = updated
+}
+
 // ── Keybindings ───────────────────────────────────────────────────────────────
 
 const recordingKey = ref(null)
@@ -607,24 +616,58 @@ onMounted(async () => {
             :class="openSections.units ? 'rotate-180' : ''" />
         </button>
 
-        <div v-show="openSections.units" class="px-6 pb-6 border-t border-neutral-700 pt-4">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Speed Unit</label>
-              <select v-model="settings.unitSettings.speedUnit"
-                class="w-full bg-neutral-900 text-white px-3 py-2 rounded border border-neutral-700 focus:border-primary focus:ring-1 focus:ring-primary outline-none">
-                <option value="mph">Miles per Hour (mph)</option>
-                <option value="kph">Kilometers per Hour (km/h)</option>
-                <option value="ms">Meters per Second (m/s)</option>
-              </select>
+        <div v-show="openSections.units" class="px-6 pb-6 border-t border-neutral-700 pt-4 space-y-5">
+
+          <!-- Speed -->
+          <div class="flex items-center justify-between py-1.5 px-2 rounded hover:bg-neutral-700/30 transition">
+            <span class="text-sm text-gray-300">Speed Unit</span>
+            <div class="flex w-44 flex-shrink-0 gap-1">
+              <button v-for="opt in [{ v:'mph', l:'mph' }, { v:'kph', l:'km/h' }, { v:'ms', l:'m/s' }]" :key="opt.v"
+                @click="settings.unitSettings.speedUnit = opt.v"
+                class="flex-1 py-0.5 rounded text-xs font-mono font-semibold transition"
+                :class="settings.unitSettings.speedUnit === opt.v
+                  ? 'bg-primary text-white'
+                  : 'bg-neutral-700 text-gray-400 hover:bg-neutral-600 hover:text-white'">
+                {{ opt.l }}
+              </button>
             </div>
-            <div>
-              <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Temperature Unit</label>
-              <select v-model="settings.unitSettings.tempUnit"
-                class="w-full bg-neutral-900 text-white px-3 py-2 rounded border border-neutral-700 focus:border-primary focus:ring-1 focus:ring-primary outline-none">
-                <option value="c">Celsius (°C)</option>
-                <option value="f">Fahrenheit (°F)</option>
-              </select>
+          </div>
+
+          <!-- Temperature -->
+          <div class="flex items-center justify-between py-1.5 px-2 rounded hover:bg-neutral-700/30 transition">
+            <span class="text-sm text-gray-300">Temperature Unit</span>
+            <div class="flex w-44 flex-shrink-0 gap-1">
+              <button v-for="opt in [{ v:'c', l:'°C' }, { v:'f', l:'°F' }]" :key="opt.v"
+                @click="settings.unitSettings.tempUnit = opt.v"
+                class="flex-1 py-0.5 rounded text-xs font-mono font-semibold transition"
+                :class="settings.unitSettings.tempUnit === opt.v
+                  ? 'bg-primary text-white'
+                  : 'bg-neutral-700 text-gray-400 hover:bg-neutral-600 hover:text-white'">
+                {{ opt.l }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Metric Precision -->
+          <div>
+            <label class="block text-xs font-bold uppercase text-gray-500 mb-2">Metric Precision</label>
+            <p class="text-xs text-gray-600 mb-3">Override decimal places per metric. Auto uses the default.</p>
+            <div class="space-y-1">
+              <div v-for="key in [...settings.metricKeys].sort((a, b) => telemetry.getDisplayName(a).localeCompare(telemetry.getDisplayName(b)))"
+                :key="key"
+                class="flex items-center justify-between py-1.5 px-2 rounded hover:bg-neutral-700/30 transition">
+                <span class="text-sm text-gray-300 truncate flex-1">{{ telemetry.getDisplayName(key) }}</span>
+                <div class="flex w-44 flex-shrink-0 gap-1">
+                  <button v-for="opt in [null, 0, 1, 2, 3]" :key="String(opt)"
+                    @click="setMetricPrecision(key, opt)"
+                    class="flex-1 py-0.5 rounded text-xs font-mono font-semibold transition"
+                    :class="(settings.metricPrecision[key] ?? null) === opt
+                      ? 'bg-primary text-white'
+                      : 'bg-neutral-700 text-gray-400 hover:bg-neutral-600 hover:text-white'">
+                    {{ opt === null ? 'Auto' : opt }}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

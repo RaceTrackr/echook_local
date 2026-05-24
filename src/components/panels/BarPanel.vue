@@ -4,7 +4,8 @@
 -->
 <script setup>
 import { computed } from 'vue'
-import { formatValue, getUnit } from '../../utils/formatting'
+import { useFormatValue } from '../../composables/useFormatValue'
+import { getUnit } from '../../utils/formatting'
 import { getThresholdColor } from '../../composables/useThresholdColor'
 import { useTheme } from '../../composables/useTheme'
 
@@ -27,22 +28,24 @@ const pct = computed(() => {
   return Math.max(0, Math.min(1, (Number(props.value) - min.value) / (max.value - min.value)))
 })
 
-const fmtValue = computed(() => formatValue(props.panel.key, props.value))
+const fmt = useFormatValue()
+const fmtValue = computed(() => fmt(props.panel.key, props.value))
 const unit     = computed(() => props.panel.unit || getUnit(props.panel.key) || '')
 </script>
 
 <template>
-  <div class="flex flex-col justify-center h-full px-4 gap-2 select-none">
+  <div class="flex flex-col justify-center h-full px-4 gap-2 select-none" style="container-type: inline-size">
 
     <!-- Title + value row -->
     <div class="flex items-baseline justify-between gap-2">
       <p class="text-xs font-bold uppercase tracking-widest text-gray-500 truncate flex-1">
         {{ panel.title || displayName }}
       </p>
-      <span class="font-mono font-bold text-lg tabular-nums flex-shrink-0"
+      <span class="font-mono font-bold tabular-nums"
         :class="isStale ? 'text-gray-600' : ''"
-        :style="isStale ? {} : { color }">
-        {{ fmtValue }}<span v-if="unit" class="text-xs text-gray-500 ml-1 font-normal">{{ unit }}</span>
+        :style="{ color: isStale ? undefined : color, fontSize: 'clamp(0.7rem, 5cqw, 1.125rem)' }">
+        {{ fmtValue }}<span v-if="unit" class="text-gray-500 font-normal ml-1"
+          :style="{ fontSize: 'clamp(0.6rem, 3cqw, 0.75rem)' }">{{ unit }}</span>
       </span>
     </div>
 

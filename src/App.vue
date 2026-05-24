@@ -47,6 +47,7 @@ watch(() => settingsStore.panelLayout, () => { pushToServer() }, { deep: true })
 watch(() => settingsStore.panelPresets, () => { pushToServer() }, { deep: true })
 watch(() => settingsStore.teamBadge, () => { pushToServer() })
 watch(() => settingsStore.loginBackground, () => { pushToServer() })
+watch(() => settingsStore.metricPrecision, () => { pushToServer() }, { deep: true })
 
 // ── Admin mode — auto-enabled for host PC, disabled for remote devices ────────
 const { isLocalHost, isLoading: isLocalLoading } = useIsLocalHost()
@@ -99,6 +100,20 @@ const setFavicon = (src) => {
     const h = img.height * scale
     ctx.drawImage(img, (SIZE - w) / 2, (SIZE - h) / 2, w, h)
     link.href = canvas.toDataURL()
+
+    // Also update apple-touch-icon so iOS home screen uses the team badge
+    const touchLink = document.querySelector("link[rel='apple-touch-icon']")
+    if (touchLink) {
+      const SIZE2 = 180
+      const c2 = document.createElement('canvas')
+      c2.width = c2.height = SIZE2
+      const ctx2 = c2.getContext('2d')
+      const scale2 = Math.min(SIZE2 / img.width, SIZE2 / img.height)
+      const w2 = img.width  * scale2
+      const h2 = img.height * scale2
+      ctx2.drawImage(img, (SIZE2 - w2) / 2, (SIZE2 - h2) / 2, w2, h2)
+      touchLink.href = c2.toDataURL()
+    }
   }
   img.src = src
 }

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Dark background with rounded corners -->
+  <rect width="512" height="512" rx="72" fill="#0f0f0f"/>
+
+  <!-- Speedometer track arc: 240° from 150° to 390° (30°), cx=256, cy=300, r=140 -->
+  <!-- start: (134.8, 370), end: (377.2, 370), large-arc=1, sweep=1 -->
+  <path
+    d="M 134.8 370 A 140 140 0 1 1 377.2 370"
+    fill="none"
+    stroke="#2a2a2a"
+    stroke-width="28"
+    stroke-linecap="round"
+  />
+
+  <!-- Filled arc at ~70% (150° to 318°), cx=256, cy=300, r=140 -->
+  <!-- start: (134.8, 370), end at 318°: (360, 206), sweep=168°, large-arc=0 -->
+  <path
+    d="M 134.8 370 A 140 140 0 0 1 360 206"
+    fill="none"
+    stroke="#cb1557"
+    stroke-width="28"
+    stroke-linecap="round"
+  />
+
+  <!-- Needle from centre (256,300) to 70% arc endpoint (360, 206) -->
+  <line
+    x1="256" y1="300"
+    x2="360" y2="206"
+    stroke="white"
+    stroke-width="10"
+    stroke-linecap="round"
+  />
+
+  <!-- Centre hub circle -->
+  <circle cx="256" cy="300" r="16" fill="#cb1557"/>
+</svg>

@@ -200,6 +200,9 @@ export const useSettingsStore = defineStore('settings', () => {
     /** @brief Keys explicitly hidden from metric selectors in graph/grafana/panel UIs */
     const hiddenMetricKeys = ref([])
 
+    /** @brief Per-metric decimal precision overrides: { [key]: number }. Absent = use default. */
+    const metricPrecision = ref({})
+
     /** @brief Visible column keys in the Laps tab table */
     const lapsVisibleCols = ref([
         'startTime', 'finishTime', 'LL_Time',
@@ -256,6 +259,7 @@ export const useSettingsStore = defineStore('settings', () => {
         if (newData.alarmThresholds) alarmThresholds.value = { ...alarmThresholds.value, ...newData.alarmThresholds }
         if (newData.races) races.value = { ...races.value, ...newData.races }
         if (newData.hiddenMetricKeys) hiddenMetricKeys.value = newData.hiddenMetricKeys
+        if (newData.metricPrecision) metricPrecision.value = { ...newData.metricPrecision }
     }
 
     return {
@@ -300,6 +304,7 @@ export const useSettingsStore = defineStore('settings', () => {
         lapsVisibleCols,
         metricKeys,
         hiddenMetricKeys,
+        metricPrecision,
 
         // Actions
         importSettings

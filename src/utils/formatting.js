@@ -38,34 +38,33 @@ export const getUnit = (key) => {
  * @param {*} value - The value to format (number, string, null, undefined)
  * @returns {string} Formatted string representation of the value
  */
-export const formatValue = (key, value) => {
+export const formatValue = (key, value, opts = {}) => {
     if (value === null || value === undefined) return '-'
     if (typeof value !== 'number') return value
 
     const k = key.toLowerCase()
 
-    // Integers
-    if (k.includes('rpm') || k.includes('gear') || k.includes('lap') || k.includes('brake')) {
-        return value.toFixed(0)
-    }
-
-    // Lap time (seconds → m:ss.s)
+    // Special formats — precision override does not apply to these
     if (k === 'lastlaptime') {
         const m = Math.floor(value / 60)
         const s = (value % 60).toFixed(1).padStart(4, '0')
         return `${m}:${s}`
     }
-
-    // Time
     if (k === 'updated' || k === 'timestamp' || k.includes('time')) {
         return new Date(value).toLocaleTimeString()
     }
-
-    // GPS
     if (k === 'lat' || k === 'lon' || k.includes('gps')) {
         return value.toFixed(5)
     }
 
-    // Default 2 decimal places
+    // Per-metric precision override
+    if (opts.precision !== null && opts.precision !== undefined) {
+        return value.toFixed(opts.precision)
+    }
+
+    // Default: integers for rpm/gear/lap/brake, 2 dp for everything else
+    if (k.includes('rpm') || k.includes('gear') || k.includes('lap') || k.includes('brake')) {
+        return value.toFixed(0)
+    }
     return value.toFixed(2)
 }

@@ -4,7 +4,8 @@
 -->
 <script setup>
 import { computed } from 'vue'
-import { formatValue, getUnit } from '../../utils/formatting'
+import { useFormatValue } from '../../composables/useFormatValue'
+import { getUnit } from '../../utils/formatting'
 import { getThresholdColor } from '../../composables/useThresholdColor'
 import { useTheme } from '../../composables/useTheme'
 
@@ -52,8 +53,17 @@ const pct = computed(() => {
 const needleDeg = computed(() => START_DEG + pct.value * SWEEP_DEG)
 
 const color    = computed(() => getThresholdColor(props.value, props.panel.thresholds, mode.value))
-const fmtValue = computed(() => formatValue(props.panel.key, props.value))
+const fmt = useFormatValue()
+const fmtValue = computed(() => fmt(props.panel.key, props.value))
 const unit     = computed(() => props.panel.unit || getUnit(props.panel.key) || '')
+
+const valueFontSize = computed(() => {
+  const len = String(fmtValue.value).length
+  if (len <= 5) return 22
+  if (len <= 7) return 18
+  if (len <= 9) return 14
+  return 11
+})
 
 // Threshold zone arcs painted on the track background
 const zones = computed(() => {
@@ -160,16 +170,16 @@ const maxPt = clockXY(START_DEG + SWEEP_DEG)
       <circle :cx="CX" :cy="CY" r="3"
         :fill="isLight ? '#64748b' : '#a1a1aa'" />
 
-      <!-- Value -->
-      <text :x="CX" :y="CY - 10" text-anchor="middle" dominant-baseline="middle"
-        font-weight="700" font-size="26"
+      <!-- Value — bottom centre of gauge face -->
+      <text :x="CX" :y="CY + 40" text-anchor="middle" dominant-baseline="middle"
+        font-weight="700" :font-size="valueFontSize"
         :fill="isStale ? (isLight ? '#94a3b8' : '#52525b') : color"
         style="transition: fill 0.3s">
         {{ fmtValue }}
       </text>
 
-      <!-- Unit (above value to avoid needle overlap) -->
-      <text v-if="unit" :x="CX" :y="CY - 28" text-anchor="middle"
+      <!-- Unit — just below value -->
+      <text v-if="unit" :x="CX" :y="CY + 56" text-anchor="middle"
         font-size="10" :fill="isLight ? '#64748b' : '#71717a'">
         {{ unit }}
       </text>

@@ -293,14 +293,16 @@ const loadPreset = (preset) => {
   settings.panelLayout   = JSON.parse(JSON.stringify(preset.panels))
   activePresetId.value   = preset.id
   showPresetMenu.value   = false
+  if (preset.tabId) settings.activeTabId = preset.tabId
 }
 
 const saveAsPreset = () => {
   const name = newPresetName.value.trim()
   if (!name) return
   const preset = {
-    id:     Date.now().toString(36),
+    id:    Date.now().toString(36),
     name,
+    tabId: settings.activeTabId,
     panels: JSON.parse(JSON.stringify(panels.value.map(({ h, hKey, ...r }) => r))),
     cols:   cols.value,
     rowH:   numRows.value,
@@ -315,6 +317,7 @@ const updatePreset = () => {
   settings.panelPresets = (settings.panelPresets ?? []).map(p =>
     p.id === activePresetId.value
       ? { ...p,
+          tabId:  settings.activeTabId,
           panels: JSON.parse(JSON.stringify(panels.value.map(({ h, hKey, ...r }) => r))),
           cols: cols.value, rowH: numRows.value }
       : p
@@ -1187,7 +1190,7 @@ const onPanelClick = (e, panel) => {
                   {{ preset.name }}
                   <PencilSquareIcon class="w-3 h-3 opacity-0 group-hover:opacity-40 transition flex-shrink-0" />
                 </button>
-                <p class="text-[10px] text-gray-600 mt-0.5">{{ preset.cols }} cols · {{ preset.rowH }} rows</p>
+                <p class="text-[10px] text-gray-600 mt-0.5">{{ preset.cols }} cols · {{ preset.rowH }} rows{{ preset.tabId ? ` · ${preset.tabId}` : '' }}</p>
               </div>
 
               <!-- Load -->

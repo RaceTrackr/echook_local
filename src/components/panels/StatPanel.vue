@@ -4,7 +4,8 @@
 -->
 <script setup>
 import { computed } from 'vue'
-import { formatValue, getUnit } from '../../utils/formatting'
+import { useFormatValue } from '../../composables/useFormatValue'
+import { getUnit } from '../../utils/formatting'
 import { getThresholdColor } from '../../composables/useThresholdColor'
 import { useTheme } from '../../composables/useTheme'
 import { useTelemetryStore } from '../../stores/telemetry'
@@ -20,7 +21,8 @@ const { mode } = useTheme()
 const telemetry = useTelemetryStore()
 
 const color    = computed(() => getThresholdColor(props.value, props.panel.thresholds, mode.value))
-const fmtValue = computed(() => formatValue(props.panel.key, props.value))
+const fmt = useFormatValue()
+const fmtValue = computed(() => fmt(props.panel.key, props.value))
 const unit     = computed(() => props.panel.unit || getUnit(props.panel.key) || '')
 
 // Sparkline — last 100 points normalised to a 0 0 100 100 SVG viewBox
@@ -78,12 +80,13 @@ const sparklinePath = computed(() => {
     </p>
     <div class="flex-1 flex items-center justify-center gap-1 min-w-0 w-full overflow-hidden relative">
       <span
-        class="font-bold tabular-nums leading-none transition-colors duration-300 truncate min-w-0"
+        class="font-bold tabular-nums leading-none transition-colors duration-300 text-center"
         :class="isStale ? 'text-gray-600' : ''"
-        :style="isStale ? { fontSize: 'clamp(1.5rem, 14cqh, 4.5rem)' } : { color, fontSize: 'clamp(1.5rem, 14cqh, 4.5rem)' }">
+        :style="isStale ? { fontSize: 'clamp(0.75rem, min(14cqh, 14cqw), 4.5rem)' } : { color, fontSize: 'clamp(0.75rem, min(14cqh, 14cqw), 4.5rem)' }">
         {{ fmtValue }}
       </span>
-      <span v-if="unit" class="text-sm text-gray-500 font-medium flex-shrink-0">{{ unit }}</span>
+      <span v-if="unit" class="text-gray-500 font-medium flex-shrink-0"
+        :style="{ fontSize: 'clamp(0.6rem, min(4cqh, 4cqw), 1rem)' }">{{ unit }}</span>
     </div>
   </div>
 </template>

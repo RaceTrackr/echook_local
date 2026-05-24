@@ -4,7 +4,8 @@
 -->
 <script setup>
 import { computed } from 'vue'
-import { formatValue, getUnit } from '../../utils/formatting'
+import { useFormatValue } from '../../composables/useFormatValue'
+import { getUnit } from '../../utils/formatting'
 import { getThresholdColor } from '../../composables/useThresholdColor'
 import { useTheme } from '../../composables/useTheme'
 
@@ -60,8 +61,17 @@ const pct = computed(() => {
 })
 
 const color    = computed(() => getThresholdColor(props.value, props.panel.thresholds, mode.value))
-const fmtValue = computed(() => formatValue(props.panel.key, props.value))
+const fmt = useFormatValue()
+const fmtValue = computed(() => fmt(props.panel.key, props.value))
 const unit     = computed(() => props.panel.unit || getUnit(props.panel.key) || '')
+
+const valueFontSize = computed(() => {
+  const len = String(fmtValue.value).length
+  if (len <= 5) return 26
+  if (len <= 7) return 21
+  if (len <= 9) return 17
+  return 13
+})
 
 const trackPath = arcPath(START_DEG, SWEEP_DEG)
 const valuePath = computed(() => arcPath(START_DEG, SWEEP_DEG * pct.value))
@@ -88,7 +98,7 @@ const maxPt = clockXY(START_DEG + SWEEP_DEG)
 
       <!-- Centre value -->
       <text :x="CX" :y="CY - 10" text-anchor="middle" dominant-baseline="middle"
-        font-weight="700" font-size="26"
+        font-weight="700" :font-size="valueFontSize"
         :fill="isStale ? (isLight ? '#94a3b8' : '#52525b') : color"
         style="transition: fill 0.3s">
         {{ fmtValue }}

@@ -17,7 +17,8 @@
  * - tooltip: Hover tooltip text
  */
 import { computed } from 'vue'
-import { formatValue, getUnit } from '../utils/formatting'
+import { useFormatValue } from '../composables/useFormatValue'
+import { getUnit } from '../utils/formatting'
 
 /**
  * @brief Component props definition.
@@ -39,7 +40,8 @@ const props = defineProps({
  * @brief Formatted display value using formatting utility.
  * @type {ComputedRef<string>}
  */
-const displayValue = computed(() => formatValue(props.label, props.value))
+const fmt = useFormatValue()
+const displayValue = computed(() => fmt(props.label, props.value))
 
 /**
  * @brief Display unit (uses prop or auto-detects from label).
