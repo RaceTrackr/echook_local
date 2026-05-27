@@ -151,9 +151,8 @@ export const useTelemetryStore = defineStore('telemetry', () => {
     const displayLiveData = computed(() => {
         const pt = liveData.value
         if (!pt) return {}
-        const scaled = scalePacketWithUnits(pt)
-        if (lastLapTime.value != null) return { ...scaled, lastLapTime: lastLapTime.value }
-        return scaled
+        if (lastLapTime.value != null) return { ...pt, lastLapTime: lastLapTime.value }
+        return pt
     })
 
     /**
